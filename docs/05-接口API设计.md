@@ -1,0 +1,415 @@
+# TasteLink 接口 API 设计文档
+
+| 项 | 内容 |
+|---|---|
+| 文档版本 | v1.0 |
+| 更新日期 | 2026-08-31 |
+| BaseURL | `/api/v1` |
+| 关联文档 | `01-需求文档.md`、`04-数据库表设计.md` |
+
+---
+
+## 1. 通用约定
+
+| 项 | 约定 |
+|---|---|
+| 前缀 | 所有接口统一 `/api/v1` 前缀 |
+| 传输 | 请求/响应均为 `application/json; charset=utf-8`；文件上传为 `multipart/form-data` |
+| 字符编码 | UTF-8 |
+| 时间格式 | 统一 `yyyy-MM-dd HH:mm:ss` 字符串 |
+| 分页参数 | `page`(从1起)、`size`(默认10，建议上限 50)；返回 `PageResult` |
+| 鉴权 | JWT 无状态，登录后置 `Authorization: Bearer ${token}` |
+| 统一返回 | `{ "code": 0, "message": "success", "data": {...} }`，`code=0` 表示业务成功 |
+
+---
+
+## 2. 鉴权机制
+
+### 2.1 JWT 流程
+1. `POST /api/v1/auth/login` 成功后返回 `token`（含 userId/username，有效期 24h）
+2. 前端将 token 存于 `localStorage`，并在请求拦截器注入 `Authorization: Bearer ${token}`
+3. 后端 `JwtAuthFilter` 解析 token，校验通过后写入 `SecurityContext`；服务层通过 `SecurityContextHelper.getCurrentUserId()` 获取登录人
+4. token 缺失/过期/非法 → 写操作返回 401 `{code,message}`（公开接口不受影响）
+
+### 2.2 白名单（无需登录）
+- `POST /api/v1/auth/register`、`POST /api/v1/auth/login`
+- `GET /api/v1/shops`、`GET /api/v1/shops/**`、`GET /api/v1/shops/categories`
+- `GET /api/v1/reviews/{id}`、`GET /api/v1/reviews/{id}/comments`
+- `GET /api/v1/users/{userId}`、`GET /api/v1/users/{userId}/reviews`
+- `GET /api/v1/users/{userId}/followings`、`GET /api/v1/users/{userId}/followers`
+- `GET /api/v1/home`、`GET /api/v1/home/**`
+
+> 其余（写操作、`GET /api/v1/users/me`、`POST /api/v1/files/image`、关注/点赞/评论等）均需登录。
+> `/users/me` 规则需配置在 `/users/**` 通配规则之前。
+
+---
+
+## 3. 统一返回体与错误码
+
+### 3.1 统一返回体
+
+```json
+{ "code": 0, "message": "success", "data": { } }
+```
+
+分页返回（`data` 为 `PageResult`）：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "records": [ ],
+    "total": 100,
+    "current": 1,
+    "size": 10,
+    "pages": 10
+  }
+}
+```
+
+### 3.2 错误码表
+
+| code | HTTP | 含义 |
+|---|---|---|
+| 0 | 200 | 业务成功 |
+| 400 | 400 | 参数校验失败 |
+| 401 | 401 | 未登录/Token失效 |
+| 403 | 403 | 无权限（如改他人资料） |
+| 404 | 404 | 资源不存在 |
+| 40901 | 200 | 用户名已存在 |
+| 40902 | 200 | 已点赞（幂等返回，业务成功） |
+| 40903 | 200 | 已关注（幂等返回，业务成功） |
+| 40904 | 200 | 不可关注自己 |
+| 500 | 500 | 服务器内部错误（不泄露堆栈） |
+
+> 点赞/关注幂等场景：重复操作视为成功，返回当前计数或当前态，避免前端处理冲突。
+
+---
+
+## 4. 接口清单
+
+### 4.1 认证模块
+
+#### POST `/api/v1/auth/register`（公开）
+注册新用户。
+
+请求体：
+```json
+{ "username": "tom", "password": "Abc12345" }
+```
+响应 `data`：
+```json
+{ "userId": 1001, "username": "tom" }
+```
+规则：`username` 唯一；密码长度≥8 且含字母+数字；密码 BCrypt 加密存储；用户名已存在返回 `40901`。
+
+#### POST `/api/v1/auth/login`（公开）
+账号密码登录。
+
+请求体：
+```json
+{ "username": "tom", "password": "Abc12345" }
+```
+响应 `data`：
+```json
+{
+  "token": "eyJhbGciOi...",
+  "expiresInSec": 86400,
+  "userId": 1001,
+  "username": "tom",
+  "nickname": "Tom",
+  "avatarUrl": "https://.../a.jpg"
+}
+```
+规则：校验通过签发 JWT；用户名或密码错误返回 401。
+
+---
+
+### 4.2 用户模块
+
+#### GET `/api/v1/users/me`（登录）
+获取当前登录用户完整资料。
+
+响应 `data`：见 [`UserVO`](#51-uservo)（本人含全部字段）。
+
+#### PUT `/api/v1/users/me`（登录）
+修改当前用户资料（昵称/头像/简介）。
+
+请求体（字段均可选）：
+```json
+{ "nickname": "新昵称", "avatarUrl": "https://.../new.jpg", "bio": "新简介" }
+```
+响应 `data`：更新后的 `UserVO`。规则：仅可改本人资料；`username` 不可改。
+
+#### GET `/api/v1/users/{userId}`（公开）
+查看某用户主页资料。
+
+响应 `data`：`UserVO`（展示字段：id, nickname, avatarUrl, bio, followingCount, followerCount, reviewCount）。
+
+#### GET `/api/v1/users/{userId}/reviews`（公开）
+某用户发布的点评列表。
+
+请求参数：`page`, `size`
+响应 `data`：`PageResult<ReviewVO>`
+
+### 4.3 店铺模块
+
+#### GET `/api/v1/shops`（公开）
+店铺列表（搜索/分类/城市筛选 + 排序）。
+
+请求参数：
+
+| 参数 | 必填 | 说明 |
+|---|---|---|
+| keyword | 否 | 店铺名模糊搜索 |
+| categoryId | 否 | 分类 id |
+| city | 否 | 城市 |
+| sortBy | 否 | 默认 `review_count`（热度）；可扩展 `rating` |
+| page | 否 | 默认 1 |
+| size | 否 | 默认 10 |
+
+响应 `data`：`PageResult<ShopVO>`
+
+#### GET `/api/v1/shops/{shopId}`（公开）
+店铺详情。
+
+响应 `data`：`ShopDetailVO`（店铺基础信息 + 近期 3 条点评预览 `List<ReviewVO>`）
+
+#### GET `/api/v1/shops/{shopId}/reviews`（公开）
+店铺下点评列表。
+
+请求参数：`page`, `size`, `sortBy`（`time` 默认 / `like` 热度）
+响应 `data`：`PageResult<ReviewVO>`
+
+#### GET `/api/v1/shops/categories`（公开）
+分类字典列表。
+
+响应 `data`：`List<CategoryVO>`
+```json
+[ { "id": 1, "code": "HOTPOT", "name": "火锅", "iconUrl": "...", "sortOrder": 1 } ]
+```
+
+---
+
+### 4.4 点评模块
+
+#### POST `/api/v1/shops/{shopId}/reviews`（登录）
+对店铺发布点评。
+
+请求体：
+```json
+{
+  "content": "汤底很正宗，毛肚嫩滑，推荐！",
+  "rating": 5,
+  "imageUrls": ["https://.../img1.jpg", "https://.../img2.jpg"]
+}
+```
+规则：`rating` 1~5；图片≤9 张；图片需先经 `/files/image` 上传拿到 URL；服务端用点评所属店铺的 `city` 冗余写入点评 `city` 字段；同事务维护店铺 `review_count`/`rating_sum`/`avg_rating` 与用户 `review_count`。
+
+响应 `data`：`ReviewVO`（含生成的 `id`）
+
+#### GET `/api/v1/reviews/{reviewId}`（公开）
+点评详情。
+
+响应 `data`：`ReviewVO`（含图片列表、作者用户信息、点赞数、评论数；若登录则含 `hasLiked` 标志）
+
+---
+
+### 4.5 互动模块
+
+#### POST `/api/v1/reviews/{reviewId}/likes`（登录）
+点赞点评（幂等）。
+
+请求体：无
+响应 `data`：
+```json
+{ "likeCount": 128 }
+```
+规则：已点赞返回当前计数不变（`40902` 业务成功语义，前端当成功处理）。
+
+#### DELETE `/api/v1/reviews/{reviewId}/likes`（登录）
+取消点赞（幂等）。
+
+响应 `data`：
+```json
+{ "likeCount": 127 }
+```
+规则：未点过赞也返回成功，计数不变。
+
+#### GET `/api/v1/reviews/{reviewId}/comments`（公开）
+点评下评论列表（单层）。
+
+请求参数：`page`, `size`
+响应 `data`：`PageResult<CommentVO>`
+
+#### POST `/api/v1/reviews/{reviewId}/comments`（登录）
+发表评论。
+
+请求体：
+```json
+{ "content": "握手，毛肚确实好吃" }
+```
+响应 `data`：`CommentVO`；同事务维护点评 `reply_count`。
+
+---
+
+### 4.6 关注模块
+
+#### POST `/api/v1/users/{userId}/follow`（登录）
+关注用户（幂等）。
+
+请求体：无
+响应 `data`：
+```json
+{ "followingCount": 42 }
+```
+规则：不可关注自己（`40904`）；已关注返回成功不变（`40903`）；同事务维护双方 `following_count`/`follower_count`。
+
+#### DELETE `/api/v1/users/{userId}/follow`（登录）
+取消关注（幂等）。
+
+响应 `data`：
+```json
+{ "followingCount": 41 }
+```
+
+#### GET `/api/v1/users/{userId}/followings`（公开）
+某用户的关注列表。
+
+请求参数：`page`, `size`
+响应 `data`：`PageResult<UserVO>`（关注者摘要）
+
+#### GET `/api/v1/users/{userId}/followers`（公开）
+某用户的粉丝列表。
+
+请求参数：`page`, `size`
+响应 `data`：`PageResult<UserVO>`（粉丝摘要）
+
+---
+
+### 4.7 首页模块
+
+#### GET `/api/v1/home`（公开）
+首页热门内容。
+
+请求参数：`city`（可选）
+
+响应 `data`：`HomeVO`
+```json
+{
+  "hotShops": [ /* ShopVO, 默认 10 条 */ ],
+  "hotReviews": [ /* ReviewVO, 默认 10 条 */ ]
+}
+```
+查询：
+- 热门店铺：`WHERE city=? AND status=1 ORDER BY review_count DESC, like_count DESC LIMIT 10`（无 city 则全局）
+- 热门店铺点评：`WHERE city=? AND status=1 ORDER BY like_count DESC, reply_count DESC LIMIT 10`（无 city 则全局）
+
+---
+
+### 4.8 文件上传模块
+
+#### POST `/api/v1/files/image`（登录）
+上传图片（后端代理 OSS 或本地存储）。
+
+请求体：`multipart/form-data`，字段 `file`
+响应 `data`：
+```json
+{ "url": "https://.../2026/08/uuid.jpg", "ossKey": "2026/08/uuid.jpg" }
+```
+规则：仅登录用户；校验类型（jpg/png/webp 等）与大小；文件名 UUID 化；返回 `url` 可直接 `<img src>` 展示。本地兜底时返回后端静态资源 URL。
+
+---
+
+## 5. 数据模型（VO）
+
+### 5.1 UserVO
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | number | 用户ID |
+| username | string | 用户名（仅本人主页或必要场景返回） |
+| nickname | string | 昵称 |
+| avatarUrl | string | 头像URL |
+| bio | string | 简介 |
+| followingCount | number | 关注数 |
+| followerCount | number | 粉丝数 |
+| reviewCount | number | 发布点评数 |
+| hasFollowed | boolean | 当前登录人是否已关注（未登录为 false） |
+
+> `password` 永不出现在任何 VO。
+
+### 5.2 ShopVO
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | number | 店铺ID |
+| name | string | 店铺名称 |
+| categoryId | number | 分类ID |
+| categoryName | string | 分类中文名 |
+| city | string | 城市 |
+| address | string | 地址 |
+| coverUrl | string | 封面图 |
+| avgRating | number | 平均评分(0.00-5.00) |
+| reviewCount | number | 点评数 |
+
+### 5.3 ShopDetailVO
+继承 `ShopVO` 字段，并附加：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| phone | string | 联系电话 |
+| description | string | 店铺简介 |
+| likeCount | number | 店铺点评累计点赞 |
+| topReviews | ReviewVO[] | 近期点评预览(默认3) |
+
+### 5.4 ReviewVO
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | number | 点评ID |
+| shopId | number | 店铺ID |
+| shopName | string | 店铺名（首页/列表场景） |
+| userId | number | 作者ID |
+| userNickname | string | 作者昵称 |
+| userAvatarUrl | string | 作者头像 |
+| content | string | 点评文字 |
+| rating | number | 评分1-5 |
+| likeCount | number | 点赞数 |
+| replyCount | number | 评论数 |
+| images | string[] | 图片URL列表(有序) |
+| hasLiked | boolean | 当前登录人是否已点赞 |
+| createTime | string | 发表时间 |
+
+### 5.5 CommentVO
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | number | 评论ID |
+| reviewId | number | 所属点评ID |
+| userId | number | 评论用户ID |
+| userNickname | string | 评论用户昵称 |
+| userAvatarUrl | string | 评论用户头像 |
+| content | string | 评论内容 |
+| createTime | string | 评论时间 |
+
+### 5.6 HomeVO
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| hotShops | ShopVO[] | 热门店铺 |
+| hotReviews | ReviewVO[] | 热门点评 |
+
+---
+
+## 6. 接口-模块-数据表速查
+
+| 接口 | 主写表 | 主读表 | 核心冗余维护 |
+|---|---|---|---|
+| 注册 | t_user | t_user | — |
+| 登录 | — | t_user | — |
+| 改资料 | t_user | t_user | — |
+| 店铺列表/详情 | — | t_shop, t_review, t_review_image | — |
+| 发点评 | t_review, t_review_image | t_shop, t_user | shop.rating_sum/avg_rating/review_count, user.review_count |
+| 点评详情 | t_review_like(读) | t_review, t_review_image, t_user | — |
+| 点赞 | t_review_like | t_review, t_shop | review.like_count (+shop.like_count) |
+| 评论 | t_review_comment | t_review | review.reply_count |
+| 关注/取关 | t_follow | t_user | 双方 following_count / follower_count |
+| 首页 | — | t_shop, t_review | — |
+| 上传 | — | （FileStorageService） | — |
