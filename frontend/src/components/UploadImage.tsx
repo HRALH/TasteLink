@@ -4,6 +4,7 @@ import type { UploadFile, UploadProps } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { uploadImage } from '../api/file'
 import { MAX_REVIEW_IMAGES } from '../utils/constants'
+import { palette } from '../styles/tokens'
 
 const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp']
 
@@ -76,7 +77,7 @@ export default function UploadImage({
       {fileList.length >= maxCount ? null : (
         <div>
           <PlusOutlined />
-          <div style={{ marginTop: 8 }}>上传图片</div>
+          <div style={{ marginTop: 8, color: palette.muted }}>上传图片</div>
         </div>
       )}
     </Upload>

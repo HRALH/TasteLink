@@ -37,7 +37,7 @@ export default function LoginPage() {
         <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}>
           <Input.Password placeholder="密码" autoComplete="current-password" />
         </Form.Item>
-        <Button type="primary" htmlType="submit" block>
+        <Button type="primary" htmlType="submit" block shape="round">
           登录
         </Button>
       </Form>

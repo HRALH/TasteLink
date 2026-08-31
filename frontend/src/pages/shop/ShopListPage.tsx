@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Col, Empty, Input, Pagination, Row, Segmented, Select, Skeleton, Space } from 'antd'
+import { Card, Col, Empty, Input, Pagination, Row, Segmented, Select, Skeleton, Space } from 'antd'
 import { SearchOutlined } from '@ant-design/icons'
 import ShopCard from '../../components/ShopCard'
+import SectionTitle from '../../components/editorial/SectionTitle'
 import { shopApi } from '../../api/shop'
 import type { CategoryVO, PageResult, ShopVO } from '../../types/api'
 import { CITIES, DEFAULT_PAGE, DEFAULT_SIZE, ShopSort } from '../../utils/constants'
@@ -55,46 +56,52 @@ export default function ShopListPage() {
 
   return (
     <div>
-      <Space size={12} wrap style={{ marginBottom: 16 }}>
-        <Input
-          placeholder="搜索店铺名称"
-          prefix={<SearchOutlined />}
-          value={keywordInput}
-          onChange={(e) => setKeywordInput(e.target.value)}
-          onPressEnter={() => {
-            setKeyword(keywordInput || undefined)
-            resetPage()
-          }}
-          style={{ width: 220 }}
-          allowClear
-        />
-        <Select
-          value={categoryId}
-          options={categoryOptions}
-          onChange={(v) => {
-            setCategoryId(v)
-            resetPage()
-          }}
-          style={{ width: 140 }}
-        />
-        <Select
-          value={city}
-          options={cityOptions}
-          onChange={(v) => {
-            setCity(v)
-            resetPage()
-          }}
-          style={{ width: 120 }}
-        />
-        <Segmented
-          options={sortOptions}
-          value={sortBy}
-          onChange={(v) => {
-            setSortBy(v as string)
-            resetPage()
-          }}
-        />
-      </Space>
+      <SectionTitle eyebrow="DISCOVER" size="lg">
+        探索店铺
+      </SectionTitle>
+
+      <Card className="tl-card" styles={{ body: { padding: 16 } }} style={{ marginBottom: 20 }}>
+        <Space size={12} wrap>
+          <Input
+            placeholder="搜索店铺名称"
+            prefix={<SearchOutlined />}
+            value={keywordInput}
+            onChange={(e) => setKeywordInput(e.target.value)}
+            onPressEnter={() => {
+              setKeyword(keywordInput || undefined)
+              resetPage()
+            }}
+            style={{ width: 220 }}
+            allowClear
+          />
+          <Select
+            value={categoryId}
+            options={categoryOptions}
+            onChange={(v) => {
+              setCategoryId(v)
+              resetPage()
+            }}
+            style={{ width: 140 }}
+          />
+          <Select
+            value={city}
+            options={cityOptions}
+            onChange={(v) => {
+              setCity(v)
+              resetPage()
+            }}
+            style={{ width: 120 }}
+          />
+          <Segmented
+            options={sortOptions}
+            value={sortBy}
+            onChange={(v) => {
+              setSortBy(v as string)
+              resetPage()
+            }}
+          />
+        </Space>
+      </Card>
 
       {loading ? (
         <Skeleton active />

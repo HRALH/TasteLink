@@ -2,15 +2,12 @@ import { useEffect, useState } from 'react'
 import {
   Button,
   Card,
-  Descriptions,
   Empty,
   Pagination,
   Rate,
   Segmented,
   Skeleton,
   Space,
-  Tag,
-  Typography,
 } from 'antd'
 import {
   EditOutlined,
@@ -21,11 +18,12 @@ import {
 } from '@ant-design/icons'
 import { Link, useParams } from 'react-router-dom'
 import ReviewCard from '../../components/ReviewCard'
+import SectionTitle from '../../components/editorial/SectionTitle'
+import Eyebrow from '../../components/editorial/Eyebrow'
 import { shopApi } from '../../api/shop'
+import { palette } from '../../styles/tokens'
 import type { PageResult, ReviewVO, ShopDetailVO } from '../../types/api'
 import { DEFAULT_PAGE, DEFAULT_SIZE, ReviewSort } from '../../utils/constants'
-
-const { Title, Paragraph } = Typography
 
 export default function ShopDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -64,62 +62,105 @@ export default function ShopDetailPage() {
 
   return (
     <div>
-      <Card style={{ marginBottom: 16 }}>
+      <Card className="tl-card" style={{ marginBottom: 24, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
         {shop.coverUrl && (
-          <img
-            src={shop.coverUrl}
-            alt={shop.name}
-            style={{ width: '100%', height: 240, objectFit: 'cover', borderRadius: 8, marginBottom: 16 }}
-          />
+          <div style={{ position: 'relative' }}>
+            <img
+              src={shop.coverUrl}
+              alt={shop.name}
+              style={{ width: '100%', height: 260, objectFit: 'cover', display: 'block' }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'linear-gradient(180deg, rgba(36,26,20,0) 40%, rgba(36,26,20,0.55))',
+              }}
+            />
+          </div>
         )}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
-          <div>
-            <Title level={4} style={{ marginBottom: 4 }}>
-              {shop.name}
-            </Title>
-            <Space size={8} wrap>
-              <Tag color="orange">{shop.categoryName}</Tag>
-              <span style={{ color: '#888' }}>
+        <div style={{ padding: 20 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              flexWrap: 'wrap',
+              gap: 12,
+            }}
+          >
+            <div>
+              <Eyebrow>{shop.categoryName}</Eyebrow>
+              <h1 className="editorial-title" style={{ fontSize: 28, margin: '6px 0 8px' }}>
+                {shop.name}
+              </h1>
+              <div
+                style={{
+                  color: palette.muted,
+                  fontSize: 14,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
                 <EnvironmentOutlined /> {shop.city} · {shop.address}
-              </span>
+              </div>
+            </div>
+            <Space direction="vertical" align="end" size={12}>
+              <Space align="center">
+                <Rate disabled allowHalf value={shop.avgRating} style={{ fontSize: 18 }} />
+                <span style={{ fontSize: 18, fontWeight: 700, color: palette.appetite }}>
+                  {shop.avgRating.toFixed(1)}
+                </span>
+              </Space>
+              <Space size={16} style={{ color: palette.muted, fontSize: 13 }}>
+                <span>
+                  <MessageOutlined /> {shop.reviewCount} 点评
+                </span>
+                <span>
+                  <LikeOutlined /> {shop.likeCount} 赞
+                </span>
+              </Space>
+              <Link to={`/shops/${shopId}/review`}>
+                <Button type="primary" shape="round" icon={<EditOutlined />}>
+                  写点评
+                </Button>
+              </Link>
             </Space>
           </div>
-          <Space direction="vertical" align="end">
-            <Space>
-              <Rate disabled allowHalf value={shop.avgRating} />
-              <span>{shop.avgRating.toFixed(1)}分</span>
-            </Space>
-            <Space size={16} style={{ color: '#888' }}>
-              <span>
-                <MessageOutlined /> {shop.reviewCount}点评
-              </span>
-              <span>
-                <LikeOutlined /> {shop.likeCount}赞
-              </span>
-            </Space>
-            <Link to={`/shops/${shopId}/review`}>
-              <Button type="primary" icon={<EditOutlined />}>
-                写点评
-              </Button>
-            </Link>
-          </Space>
-        </div>
-        {shop.description ? (
-          <Paragraph style={{ marginTop: 12, color: '#555' }}>{shop.description}</Paragraph>
-        ) : null}
-        {shop.phone ? (
-          <Descriptions size="small" column={1} style={{ marginTop: 8 }}>
-            <Descriptions.Item label="电话">
+          {shop.description ? (
+            <p style={{ marginTop: 14, color: palette.ink, lineHeight: 1.7, marginBottom: 0 }}>
+              {shop.description}
+            </p>
+          ) : null}
+          {shop.phone ? (
+            <div
+              style={{
+                marginTop: 10,
+                color: palette.muted,
+                fontSize: 13,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
               <PhoneOutlined /> {shop.phone}
-            </Descriptions.Item>
-          </Descriptions>
-        ) : null}
+            </div>
+          ) : null}
+        </div>
       </Card>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <Title level={5} style={{ margin: 0 }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 14,
+        }}
+      >
+        <SectionTitle eyebrow="REVIEWS" size="md" style={{ marginBottom: 0 }}>
           点评
-        </Title>
+        </SectionTitle>
         <Segmented
           options={[
             { label: '最新', value: ReviewSort.TIME },
@@ -145,7 +186,7 @@ export default function ShopDetailPage() {
             ))}
           </div>
           <Pagination
-            style={{ marginTop: 16, textAlign: 'center' }}
+            style={{ marginTop: 24, textAlign: 'center' }}
             current={page}
             pageSize={DEFAULT_SIZE}
             total={reviews.total}
