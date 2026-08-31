@@ -41,7 +41,7 @@ export default function FollowButton({
   }
 
   return (
-    <Button type={followed ? 'default' : 'primary'} loading={loading} onClick={toggle}>
+    <Button type={followed ? 'default' : 'primary'} shape="round" loading={loading} onClick={toggle}>
       {followed ? '已关注' : '关注'}
     </Button>
   )

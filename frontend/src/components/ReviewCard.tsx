@@ -1,11 +1,10 @@
-import { Avatar, Card, Image as AntImage, Rate, Space, Typography } from 'antd'
+import { Avatar, Card, Image as AntImage, Rate, Space } from 'antd'
 import { LikeOutlined, MessageOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
 import type { ReviewVO } from '../types/api'
+import { palette } from '../styles/tokens'
 
-const { Paragraph } = Typography
-
-/** 点评卡片：作者 + 评分 + 文字 + 图片预览 + 点赞/评论数 + 详情入口 */
+/** 点评卡片：杂志引文 —— 署名 + 评分 + 宋体引文正文 + 图片 + 点赞/评论/详情 */
 export default function ReviewCard({
   review,
   showShop = true,
@@ -14,51 +13,67 @@ export default function ReviewCard({
   showShop?: boolean
 }) {
   return (
-    <Card styles={{ body: { padding: 16 } }}>
-      <Space align="start" size={12}>
-        <Link to={`/users/${review.userId}`}>
-          <Avatar src={review.userAvatarUrl}>{review.userNickname?.[0]}</Avatar>
+    <Card className="tl-card tl-rise" styles={{ body: { padding: 18 } }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 4,
+        }}
+      >
+        <Space size={10} align="center">
+          <Link to={`/users/${review.userId}`}>
+            <Avatar src={review.userAvatarUrl} size={32}>
+              {review.userNickname?.[0]}
+            </Avatar>
+          </Link>
+          <Link to={`/users/${review.userId}`} style={{ fontWeight: 600, color: palette.ink }}>
+            {review.userNickname}
+          </Link>
+        </Space>
+        <Rate disabled value={review.rating} style={{ fontSize: 14 }} />
+      </div>
+
+      {showShop && review.shopName ? (
+        <Link to={`/shops/${review.shopId}`} style={{ fontSize: 13, color: palette.gold, fontWeight: 600 }}>
+          {review.shopName}
         </Link>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Link to={`/users/${review.userId}`} style={{ fontWeight: 600 }}>
-              {review.userNickname}
-            </Link>
-            <Rate disabled value={review.rating} style={{ fontSize: 14 }} />
-          </div>
-          {showShop && review.shopName ? (
-            <Link to={`/shops/${review.shopId}`} style={{ fontSize: 13, color: '#ff6b35' }}>
-              {review.shopName}
-            </Link>
-          ) : null}
-          <Paragraph ellipsis={{ rows: 3 }} style={{ margin: '8px 0', color: '#333' }}>
-            {review.content}
-          </Paragraph>
-          {review.images?.length ? (
-            <AntImage.PreviewGroup>
-              <Space size={6} wrap style={{ marginBottom: 4 }}>
-                {review.images.slice(0, 4).map((url, i) => (
-                  <AntImage
-                    key={i}
-                    src={url}
-                    width={80}
-                    height={80}
-                    style={{ objectFit: 'cover', borderRadius: 4 }}
-                  />
-                ))}
-              </Space>
-            </AntImage.PreviewGroup>
-          ) : null}
-          <Space size={16} style={{ color: '#999', fontSize: 13, marginTop: 8 }}>
-            <span>
-              <LikeOutlined /> {review.likeCount}
-            </span>
-            <span>
-              <MessageOutlined /> {review.replyCount}
-            </span>
-            <Link to={`/reviews/${review.id}`}>查看详情</Link>
+      ) : null}
+
+      <div className="pullquote" style={{ margin: '10px 0 4px' }}>
+        <span aria-hidden style={{ color: palette.appetite, fontWeight: 700, marginRight: 2 }}>
+          {'❝'}
+        </span>
+        <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{review.content}</span>
+      </div>
+
+      {review.images?.length ? (
+        <AntImage.PreviewGroup>
+          <Space size={6} wrap style={{ marginTop: 10 }}>
+            {review.images.slice(0, 4).map((url, i) => (
+              <AntImage
+                key={i}
+                src={url}
+                width={80}
+                height={80}
+                style={{ objectFit: 'cover', borderRadius: 8 }}
+              />
+            ))}
           </Space>
-        </div>
+        </AntImage.PreviewGroup>
+      ) : null}
+
+      <Space size={18} style={{ color: palette.muted, fontSize: 13, marginTop: 12 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <LikeOutlined /> {review.likeCount}
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <MessageOutlined /> {review.replyCount}
+        </span>
+        <Link to={`/reviews/${review.id}`} style={{ fontWeight: 600 }}>
+          查看详情
+        </Link>
       </Space>
     </Card>
   )

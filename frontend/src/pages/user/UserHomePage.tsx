@@ -15,12 +15,14 @@ import {
 import { Link, useParams } from 'react-router-dom'
 import ReviewCard from '../../components/ReviewCard'
 import FollowButton from '../../components/FollowButton'
+import SectionTitle from '../../components/editorial/SectionTitle'
 import { userApi } from '../../api/user'
+import { palette } from '../../styles/tokens'
 import type { PageResult, ReviewVO, UserVO } from '../../types/api'
 import { DEFAULT_PAGE, DEFAULT_SIZE } from '../../utils/constants'
 import { useAuthStore } from '../../store/authStore'
 
-const { Title, Paragraph } = Typography
+const { Paragraph } = Typography
 
 export default function UserHomePage() {
   const { id } = useParams<{ id: string }>()
@@ -59,19 +61,19 @@ export default function UserHomePage() {
 
   return (
     <div>
-      <Card style={{ marginBottom: 16 }}>
-        <Space size={16} align="start" wrap>
-          <Avatar size={72} src={user.avatarUrl}>
+      <Card className="tl-card" style={{ marginBottom: 24 }}>
+        <Space size={20} align="start" wrap>
+          <Avatar size={80} src={user.avatarUrl} style={{ background: palette.rule }}>
             {user.nickname?.[0]}
           </Avatar>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <Title level={4} style={{ marginBottom: 4 }}>
+            <h1 className="editorial-title" style={{ fontSize: 24, margin: '0 0 4px' }}>
               {user.nickname}
-            </Title>
-            <Paragraph type="secondary" style={{ margin: 0 }}>
+            </h1>
+            <Paragraph style={{ color: palette.muted, margin: 0 }}>
               {user.bio || '这个人很神秘，什么都没留下'}
             </Paragraph>
-            <Row gutter={32} style={{ marginTop: 12 }}>
+            <Row gutter={36} style={{ marginTop: 16 }}>
               <Col>
                 <Link to={`/users/${userId}/followings`}>
                   <Statistic title="关注" value={user.followingCount} />
@@ -89,7 +91,7 @@ export default function UserHomePage() {
           </div>
           {isMe ? (
             <Link to="/me">
-              <Button>编辑资料</Button>
+              <Button shape="round">编辑资料</Button>
             </Link>
           ) : (
             <FollowButton
@@ -107,7 +109,7 @@ export default function UserHomePage() {
         </Space>
       </Card>
 
-      <Title level={5}>Ta的点评</Title>
+      <SectionTitle eyebrow="REVIEWS">Ta的点评</SectionTitle>
       {loadingReviews ? (
         <Skeleton active />
       ) : !reviews?.records?.length ? (
@@ -120,7 +122,7 @@ export default function UserHomePage() {
             ))}
           </div>
           <Pagination
-            style={{ marginTop: 16, textAlign: 'center' }}
+            style={{ marginTop: 20, textAlign: 'center' }}
             current={page}
             pageSize={DEFAULT_SIZE}
             total={reviews.total}

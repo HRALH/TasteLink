@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Empty, Pagination, Skeleton, Typography } from 'antd'
+import { Empty, Pagination, Skeleton } from 'antd'
 import { followApi } from '../api/follow'
 import type { PageResult, UserVO } from '../types/api'
 import { DEFAULT_PAGE, DEFAULT_SIZE } from '../utils/constants'
 import UserCard from './UserCard'
-
-const { Title } = Typography
+import SectionTitle from './editorial/SectionTitle'
 
 /** 关注/粉丝列表复用组件 */
 export default function FollowList({
@@ -31,7 +30,9 @@ export default function FollowList({
 
   return (
     <div>
-      <Title level={5}>{mode === 'followings' ? '关注列表' : '粉丝列表'}</Title>
+      <SectionTitle eyebrow={mode === 'followings' ? 'FOLLOWING' : 'FOLLOWERS'} size="sm">
+        {mode === 'followings' ? '关注列表' : '粉丝列表'}
+      </SectionTitle>
       {loading ? (
         <Skeleton active />
       ) : !data?.records?.length ? (
@@ -42,7 +43,7 @@ export default function FollowList({
             <UserCard key={u.id} user={u} />
           ))}
           <Pagination
-            style={{ marginTop: 16, textAlign: 'center' }}
+            style={{ marginTop: 20, textAlign: 'center' }}
             current={page}
             pageSize={DEFAULT_SIZE}
             total={data.total}

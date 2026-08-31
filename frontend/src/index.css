@@ -1,6 +1,25 @@
 :root {
-  --color-primary: #ff6b35;
-  --content-max-width: 1100px;
+  /* 色板（与 src/styles/tokens.ts 一致） */
+  --paper: #fbf6ee;
+  --surface: #ffffff;
+  --ink: #241a14;
+  --appetite: #c8102e;
+  --ember: #a30d24;
+  --gold: #b7791f;
+  --rule: #e7ddc9;
+  --muted: #8a7b6b;
+
+  --radius-card: 10px;
+  --radius-thumb: 8px;
+  --content-width: 1120px;
+
+  --font-serif: 'Playfair Display', 'Noto Serif SC', 'Songti SC', 'STSong', serif;
+  --font-sc: 'Playfair Display SC', 'Playfair Display', 'Noto Serif SC', serif;
+  --font-sans: 'Karla', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+
+  --shadow-card: 0 1px 2px rgba(36, 26, 20, 0.04);
+  --shadow-hover: 0 1px 2px rgba(36, 26, 20, 0.04), 0 10px 28px rgba(36, 26, 20, 0.07);
 }
 
 * {
@@ -16,19 +35,135 @@ body,
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-  background: #f5f5f5;
-  color: rgba(0, 0, 0, 0.88);
+  font-family: var(--font-sans);
+  background: var(--paper);
+  color: var(--ink);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 a {
   text-decoration: none;
   color: inherit;
+  transition: color 150ms ease;
+}
+
+a:hover {
+  color: var(--appetite);
 }
 
 img {
   display: block;
   max-width: 100%;
+}
+
+::selection {
+  background: rgba(200, 16, 46, 0.16);
+  color: var(--ink);
+}
+
+/* 焦点环（键盘可达） */
+:focus-visible {
+  outline: 2px solid var(--appetite);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* 暖色滚动条 */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-thumb {
+  background: #e2d6be;
+  border: 3px solid var(--paper);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #d4c39e;
+}
+
+/* —— 编辑式工具类 —— */
+
+/* 小型大写 eyebrow：分类/章节标签（Playfair SC + 字距，暖金） */
+.eyebrow {
+  font-family: var(--font-sc);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-weight: 700;
+}
+
+/* 章节标题：宋体 */
+.editorial-title {
+  font-family: var(--font-serif);
+  color: var(--ink);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+/* 杂志引文：宋体正文，配合 PullQuote 组件的大号开引号 */
+.pullquote {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--ink);
+}
+
+/* 发丝线 */
+.hairline {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 0;
+}
+
+/* 卡片入场（尊重 reduced-motion） */
+@keyframes tl-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.tl-rise {
+  animation: tl-rise 240ms ease both;
+}
+
+/* 卡片悬浮：轻微上抬 + 暖影（搭配 className="tl-card"） */
+.tl-card {
+  transition:
+    box-shadow 200ms ease,
+    transform 200ms ease;
+}
+.tl-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-hover);
+}
+
+/* 分页当前页：红底白字（修正 Token 设红底后数字仍为红色、红叠红不可读） */
+.ant-pagination .ant-pagination-item-active,
+.ant-pagination .ant-pagination-item-active:hover {
+  background: var(--appetite) !important;
+  border-color: var(--appetite) !important;
+}
+.ant-pagination .ant-pagination-item-active a,
+.ant-pagination .ant-pagination-item-active a:hover {
+  color: #fff !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .tl-card:hover {
+    transform: none;
+  }
 }

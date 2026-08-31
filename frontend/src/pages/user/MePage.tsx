@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Avatar, Button, Card, Form, Input, Skeleton, Typography, message } from 'antd'
+import { Avatar, Button, Card, Form, Input, Skeleton, message } from 'antd'
 import UploadImage from '../../components/UploadImage'
+import SectionTitle from '../../components/editorial/SectionTitle'
 import { userApi } from '../../api/user'
 import { useAuthStore } from '../../store/authStore'
+import { palette } from '../../styles/tokens'
 import type { UserVO } from '../../types/api'
 
 const { TextArea } = Input
-const { Title } = Typography
 
 interface ProfileFormValues {
   nickname: string
@@ -56,18 +57,22 @@ export default function MePage() {
   if (loading || !user) return <Skeleton avatar active />
 
   return (
-    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-      <Card style={{ flex: '1 1 240px' }}>
-        <Title level={5}>头像</Title>
-        <Avatar size={96} src={avatarUrl || user.avatarUrl}>
+    <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+      <Card className="tl-card" style={{ flex: '1 1 240px' }}>
+        <SectionTitle size="sm" style={{ marginBottom: 12 }}>
+          头像
+        </SectionTitle>
+        <Avatar size={96} src={avatarUrl || user.avatarUrl} style={{ background: palette.rule }}>
           {user.nickname?.[0]}
         </Avatar>
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 16 }}>
           <UploadImage onChange={(urls) => setAvatarUrl(urls[urls.length - 1] || '')} maxCount={1} />
         </div>
       </Card>
-      <Card style={{ flex: '1 1 320px' }}>
-        <Title level={5}>编辑资料</Title>
+      <Card className="tl-card" style={{ flex: '1 1 320px' }}>
+        <SectionTitle size="sm" style={{ marginBottom: 12 }}>
+          编辑资料
+        </SectionTitle>
         <Form form={form} layout="vertical" onFinish={onSave}>
           <Form.Item label="用户名">
             <Input value={user.username} disabled />
@@ -78,7 +83,7 @@ export default function MePage() {
           <Form.Item name="bio" label="简介">
             <TextArea rows={3} maxLength={100} showCount placeholder="介绍一下自己吧" />
           </Form.Item>
-          <Button type="primary" htmlType="submit" loading={submitting}>
+          <Button type="primary" shape="round" htmlType="submit" loading={submitting}>
             保存
           </Button>
         </Form>

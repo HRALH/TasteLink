@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Button, Card, Form, Input, Rate, Typography, message } from 'antd'
+import { Button, Card, Form, Input, Rate, message } from 'antd'
 import { useNavigate, useParams } from 'react-router-dom'
 import UploadImage from '../../components/UploadImage'
+import SectionTitle from '../../components/editorial/SectionTitle'
 import { reviewApi } from '../../api/review'
 import { shopApi } from '../../api/shop'
 import type { ShopDetailVO } from '../../types/api'
 import { MAX_REVIEW_IMAGES } from '../../utils/constants'
 
 const { TextArea } = Input
-const { Title } = Typography
 
 interface ReviewFormValues {
   content: string
@@ -50,8 +50,10 @@ export default function ShopReviewPage() {
   }
 
   return (
-    <Card>
-      <Title level={4}>{shop ? `给「${shop.name}」写点评` : '写点评'}</Title>
+    <Card className="tl-card" style={{ maxWidth: 680 }}>
+      <SectionTitle eyebrow="WRITE A REVIEW" size="md">
+        {shop ? `给「${shop.name}」写点评` : '写点评'}
+      </SectionTitle>
       <Form form={form} layout="vertical" initialValues={{ rating: 5 }} onFinish={onFinish}>
         <Form.Item name="rating" label="评分" rules={[{ required: true, message: '请选择评分' }]}>
           <Rate />
@@ -66,7 +68,7 @@ export default function ShopReviewPage() {
         <Form.Item label={`图片（最多 ${MAX_REVIEW_IMAGES} 张）`}>
           <UploadImage onChange={setImageUrls} />
         </Form.Item>
-        <Button type="primary" htmlType="submit" loading={submitting}>
+        <Button type="primary" shape="round" htmlType="submit" loading={submitting}>
           发布点评
         </Button>
       </Form>
