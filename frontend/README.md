@@ -1,0 +1,62 @@
+# TasteLink 前端
+
+TasteLink 餐饮口碑社区 Web 端（SPA）。对应设计文档 `docs/01-需求文档.md`、`docs/03-前端模块划分.md`、`docs/05-接口API设计.md`。
+
+## 技术栈
+
+| 层 | 选型 | 说明 |
+|---|---|---|
+| 框架 | React 19 + Vite（TypeScript） | 文档规划 React 18，模板默认 React 19（18 的超集，AntD5 已支持） |
+| UI | Ant Design 5 | 表单/列表/上传/分页/消息 |
+| 全局状态 | Zustand（persist） | 登录态 token/userInfo，持久化 localStorage |
+| 路由 | React Router v6 | 路由表 + 路由守卫（RequireAuth） |
+| 请求 | axios | baseURL + JWT 拦截器 + 统一错误 + 401 跳登录 |
+
+## 目录结构
+
+```
+src/
+├── main.tsx               入口（ConfigProvider 中文 + 主题色）
+├── App.tsx                BrowserRouter 包裹路由
+├── api/                   接口层（与后端 1:1）：request / auth / user / shop /
+│                          review / interaction / follow / home / file
+├── store/authStore.ts     登录态（persist）
+├── router/index.tsx       路由表 + RequireAuth 守卫
+├── types/api.ts           统一返回体 R / PageResult / 各 VO 契约
+├── utils/constants.ts     错误码、城市字典、排序枚举、常量
+├── components/            通用组件：ShopCard / ReviewCard / UploadImage /
+│                          FollowButton / UserCard / FollowList / AuthShell /
+│                          PagePlaceholder / layout/MainLayout
+└── pages/                 auth / home / shop / review / user / common(404)
+```
+
+## 命令
+
+```bash
+npm install        # 安装依赖
+npm run dev        # 开发，http://localhost:5173
+npm run build      # 类型检查 + 生产构建（tsc -b && vite build）
+npm run lint       # oxlint
+npm run preview    # 预览构建产物
+```
+
+## 环境与联调
+
+- `VITE_API_BASE_URL`：默认 `/api/v1`，dev 经 `vite.config.ts` 代理 `/api → http://localhost:8080`，避免 CORS。
+- 后端启动在 `8080` 即可联调；后端未就绪时页面骨架仍可渲染，接口请求会失败。
+- 鉴权：登录后 token 持久化，请求自动注入 `Authorization: Bearer`；401 清登录态跳 `/login` 回带 `redirect`。
+
+## 里程碑（docs/03 §6）
+
+| 里程碑 | 内容 | 状态 |
+|---|---|---|
+| M10 | 工程搭建：Vite + 依赖 + request/authStore/路由/守卫/布局 | ✅ |
+| M8 | 登录/注册（密码校验 + redirect 回跳） | ✅ |
+| M9 | 首页（城市筛选 + 热门店铺/点评） | ✅ |
+| M10b | 店铺列表（搜索/分类/城市/排序/分页）+ 详情（点评列表） | ✅ |
+| M11 | 发点评（UploadImage 多图 + 评分）+ 点评详情 | ✅ |
+| M12 | 点赞（乐观更新、幂等）+ 评论列表/输入 | ✅ |
+| M13 | 用户主页 + 编辑资料 + 关注/粉丝列表 | ✅ |
+| M14 | 前后端联调验收 | 待后端就绪 |
+
+> 通用约定见 `docs/03 §7`：图片统一走 `/files/image` 拿 URL 后再提交；分页 `page/size` + `PageResult`；排序字典见 `utils/constants.ts`。
