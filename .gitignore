@@ -9,6 +9,7 @@
 .agents/
 .sc/
 skills-lock.json
+.codefuse/
 
 # ===== 敏感配置（防止真实凭据入库）=====
 # 环境变量 / 密钥文件
