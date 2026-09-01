@@ -14,22 +14,10 @@ public class R<T> {
     private String message;
     private T data;
 
-    public static <T> R<T> ok() {
-        return ok(null);
-    }
-
     public static <T> R<T> ok(T data) {
         R<T> r = new R<>();
         r.code = ResultCode.SUCCESS.getCode();
         r.message = ResultCode.SUCCESS.getMessage();
-        r.data = data;
-        return r;
-    }
-
-    public static <T> R<T> ok(String message, T data) {
-        R<T> r = new R<>();
-        r.code = ResultCode.SUCCESS.getCode();
-        r.message = message;
         r.data = data;
         return r;
     }

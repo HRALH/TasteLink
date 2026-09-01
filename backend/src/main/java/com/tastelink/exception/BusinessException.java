@@ -23,10 +23,4 @@ public class BusinessException extends RuntimeException {
         this.code = rc.getCode();
         this.httpStatus = rc.getHttpStatus();
     }
-
-    public BusinessException(int code, int httpStatus, String message) {
-        super(message);
-        this.code = code;
-        this.httpStatus = httpStatus;
-    }
 }

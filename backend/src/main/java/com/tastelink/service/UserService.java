@@ -27,9 +27,6 @@ public interface UserService {
     /** 查看某用户主页资料（公开，不含 username） */
     UserVO getUserById(Long id);
 
-    /** 取用户实体（供其他模块按 userId 取昵称/头像，软删则可能为 null） */
-    User getUserEntity(Long id);
-
     /** 批量转用户摘要 VO（关注/粉丝列表用），含 hasFollowed 批量计算 */
     List<UserVO> toUserVOs(Collection<User> users, Long currentUserId);
 }

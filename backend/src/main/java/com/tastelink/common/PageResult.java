@@ -28,11 +28,6 @@ public class PageResult<T> {
         return p;
     }
 
-    /** MyBatis-Plus Page 同类型直接转换。 */
-    public static <T> PageResult<T> from(Page<T> page) {
-        return of(page.getRecords(), page.getTotal(), page.getCurrent(), page.getSize());
-    }
-
     /** MyBatis-Plus Page 查询实体，外部转成 VO 列表。 */
     public static <E, T> PageResult<T> from(Page<E> page, List<T> records) {
         return of(records, page.getTotal(), page.getCurrent(), page.getSize());

@@ -5,7 +5,6 @@ import com.tastelink.dto.request.PageQuery;
 import com.tastelink.dto.response.CategoryVO;
 import com.tastelink.dto.response.ShopDetailVO;
 import com.tastelink.dto.response.ShopVO;
-import com.tastelink.entity.Shop;
 
 import java.util.List;
 
@@ -19,9 +18,6 @@ public interface ShopService {
 
     /** 分类字典（按 sort_order 升序） */
     List<CategoryVO> listCategories();
-
-    /** 取店铺实体（供点评模块读取城市/校验存在） */
-    Shop getShopEntity(Long shopId);
 
     /** 首页热门店铺（按 review_count 倒序，再按 like_count 倒序，city 可选） */
     List<ShopVO> hotShops(String city, int limit);

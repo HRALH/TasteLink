@@ -106,11 +106,6 @@ public class ShopServiceImpl implements ShopService {
     }
 
     @Override
-    public Shop getShopEntity(Long shopId) {
-        return shopMapper.selectById(shopId);
-    }
-
-    @Override
     public List<ShopVO> hotShops(String city, int limit) {
         Page<Shop> page = new Page<>(1, limit, false);
         LambdaQueryWrapper<Shop> w = new LambdaQueryWrapper<Shop>()
