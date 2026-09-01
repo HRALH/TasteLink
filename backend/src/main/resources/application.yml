@@ -1,0 +1,77 @@
+# =====================================================================
+# TasteLink 后端配置（提交版：仅含占位符与环境变量引用，无真实凭据）
+# 真实 DB 口令 / OSS AK/SK / JWT 密钥 请写入 application-local.yml（已 gitignore）
+# 或通过环境变量注入，切勿直接回填本文件。
+# =====================================================================
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+spring:
+  # 默认激活 local profile；真实 DB 口令 / OSS AK/SK / JWT 密钥写入
+  # application-local.yml（已 gitignore），覆盖下方占位符。
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  application:
+    name: tastelink-backend
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:tastelink}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 20000
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+  # 不自动执行 SQL 脚本（建表与种子数据由运维手动执行 docs/db 下的脚本）
+  sql:
+    init:
+      mode: never
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    default-fetch-size: 100
+    default-statement-timeout: 30
+  mapper-locations: classpath*:mapper/*.xml
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+      # 注意：MVP 不全局开启逻辑删除；status 字段由业务按需过滤，故不设置 logic-delete-field。
+
+# =====================================================================
+# TasteLink 业务配置
+# =====================================================================
+tastelink:
+  jwt:
+    secret: ${JWT_SECRET:change-me-please-use-a-long-random-secret-string-of-at-least-32-chars}
+    expire-seconds: 86400
+    header: Authorization
+    prefix: "Bearer "
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+  storage:
+    # oss | local；默认 local 兜底，避免无 OSS 凭据时无法联调
+    type: ${STORAGE_TYPE:local}
+    local:
+      base-path: ${STORAGE_LOCAL_PATH:./data/uploads}
+      url-prefix: /static/uploads
+      public-base-url: ${STORAGE_PUBLIC_BASE_URL:http://localhost:8080}
+    oss:
+      endpoint: ${OSS_ENDPOINT:}
+      access-key-id: ${OSS_AK:}
+      access-key-secret: ${OSS_SK:}
+      bucket: ${OSS_BUCKET:}
+      domain: ${OSS_DOMAIN:}   # 自定义访问域名；为空则用 https://{bucket}.{endpoint}
