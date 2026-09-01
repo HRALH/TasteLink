@@ -20,8 +20,8 @@ TasteLink is a 城市餐饮口碑社区 (city food review community) — a monor
 cd backend
 mvn spring-boot:run            # run dev server on :8080
 mvn clean package              # build jar (target/)
-mvn test                       # run all tests
-mvn test -Dtest=ReviewServiceImpl#like   # single test (class#method)
+mvn test                       # run all tests (NOTE: no tests exist yet — `src/test` is empty; spring-boot-starter-test is wired, so this runs 0 tests today)
+mvn test -Dtest=MyTest#method  # single-test pattern (class#method) — usable once tests are added under `backend/src/test`
 ```
 Requires MySQL 8 reachable per `application.yml` defaults (`localhost:3306/tastelink`). DB is **not** auto-initialized — `spring.sql.init.mode=never`; run `db/schema.sql` then `db/data.sql` manually before first start.
 
