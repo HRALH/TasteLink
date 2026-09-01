@@ -6,7 +6,6 @@
 *.iml
 
 # ===== 工具环境（不属于项目源码）=====
-.agents/
 .sc/
 skills-lock.json
 .codefuse/
