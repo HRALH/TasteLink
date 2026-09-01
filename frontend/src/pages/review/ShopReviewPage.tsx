@@ -3,6 +3,7 @@ import { Button, Card, Form, Input, Rate, message } from 'antd'
 import { useNavigate, useParams } from 'react-router-dom'
 import UploadImage from '../../components/UploadImage'
 import SectionTitle from '../../components/editorial/SectionTitle'
+import { Reveal } from '../../components/motion'
 import { reviewApi } from '../../api/review'
 import { shopApi } from '../../api/shop'
 import type { ShopDetailVO } from '../../types/api'
@@ -50,28 +51,36 @@ export default function ShopReviewPage() {
   }
 
   return (
-    <Card className="tl-card" style={{ maxWidth: 680 }}>
-      <SectionTitle eyebrow="WRITE A REVIEW" size="md">
-        {shop ? `给「${shop.name}」写点评` : '写点评'}
-      </SectionTitle>
-      <Form form={form} layout="vertical" initialValues={{ rating: 5 }} onFinish={onFinish}>
-        <Form.Item name="rating" label="评分" rules={[{ required: true, message: '请选择评分' }]}>
-          <Rate />
-        </Form.Item>
-        <Form.Item
-          name="content"
-          label="点评内容"
-          rules={[{ required: true, message: '请填写点评内容' }]}
-        >
-          <TextArea rows={5} maxLength={500} showCount placeholder="分享你的用餐体验…" />
-        </Form.Item>
-        <Form.Item label={`图片（最多 ${MAX_REVIEW_IMAGES} 张）`}>
-          <UploadImage onChange={setImageUrls} />
-        </Form.Item>
-        <Button type="primary" shape="round" htmlType="submit" loading={submitting}>
-          发布点评
-        </Button>
-      </Form>
-    </Card>
+    <Reveal>
+      <Card className="tl-card" style={{ maxWidth: 680 }}>
+        <SectionTitle eyebrow="WRITE A REVIEW" size="md">
+          {shop ? `给「${shop.name}」写点评` : '写点评'}
+        </SectionTitle>
+        <Form form={form} layout="vertical" initialValues={{ rating: 5 }} onFinish={onFinish}>
+          <Form.Item name="rating" label="评分" rules={[{ required: true, message: '请选择评分' }]}>
+            <Rate />
+          </Form.Item>
+          <Form.Item
+            name="content"
+            label="点评内容"
+            rules={[{ required: true, message: '请填写点评内容' }]}
+          >
+            <TextArea rows={5} maxLength={500} showCount placeholder="分享你的用餐体验…" />
+          </Form.Item>
+          <Form.Item label={`图片（最多 ${MAX_REVIEW_IMAGES} 张）`}>
+            <UploadImage onChange={setImageUrls} />
+          </Form.Item>
+          <Button
+            type="primary"
+            shape="round"
+            htmlType="submit"
+            loading={submitting}
+            className="tl-press"
+          >
+            发布点评
+          </Button>
+        </Form>
+      </Card>
+    </Reveal>
   )
 }

@@ -21,6 +21,7 @@ import { DEFAULT_PAGE, DEFAULT_SIZE } from '../../utils/constants'
 import { useAuthStore } from '../../store/authStore'
 import PullQuote from '../../components/editorial/PullQuote'
 import SectionTitle from '../../components/editorial/SectionTitle'
+import { Reveal } from '../../components/motion'
 import { palette } from '../../styles/tokens'
 
 const { TextArea } = Input
@@ -40,6 +41,8 @@ export default function ReviewDetailPage() {
   const [commentLoading, setCommentLoading] = useState(false)
   const [commentText, setCommentText] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // 点赞心爆重放计数：每次 toggleLike 自增，驱动 icon remount 重播 .tl-heartburst
+  const [likeBurst, setLikeBurst] = useState(0)
 
   // 加载点评详情
   useEffect(() => {
@@ -77,6 +80,7 @@ export default function ReviewDetailPage() {
       hasLiked: !liked,
       likeCount: Math.max(0, review.likeCount + (liked ? -1 : 1)),
     })
+    setLikeBurst((b) => b + 1)
     try {
       const res = liked ? await interactionApi.unlike(reviewId) : await interactionApi.like(reviewId)
       setReview((r) => (r ? { ...r, likeCount: res.likeCount, hasLiked: !liked } : r))
@@ -114,6 +118,7 @@ export default function ReviewDetailPage() {
 
   return (
     <div>
+      <Reveal>
       <Card className="tl-card">
         <div
           style={{
@@ -167,9 +172,14 @@ export default function ReviewDetailPage() {
           <Button
             type={review.hasLiked ? 'primary' : 'default'}
             shape="round"
-            icon={review.hasLiked ? <LikeFilled /> : <LikeOutlined />}
+            icon={
+              <span key={likeBurst} className={likeBurst ? 'tl-heartburst' : undefined}>
+                {review.hasLiked ? <LikeFilled /> : <LikeOutlined />}
+              </span>
+            }
             loading={likeLoading}
             onClick={toggleLike}
+            className="tl-press"
           >
             {review.likeCount} 赞
           </Button>
@@ -177,8 +187,10 @@ export default function ReviewDetailPage() {
           <span>{review.createTime}</span>
         </Space>
       </Card>
+      </Reveal>
 
-      <Card className="tl-card" style={{ marginTop: 20 }}>
+      <Reveal style={{ marginTop: 20 }}>
+      <Card className="tl-card">
         <SectionTitle eyebrow="COMMENTS" size="sm">
           评论 ({review.replyCount})
         </SectionTitle>
@@ -199,6 +211,7 @@ export default function ReviewDetailPage() {
             loading={submitting}
             disabled={!isLoggedIn || !commentText.trim()}
             onClick={submitComment}
+            className="tl-press"
           >
             发表评论
           </Button>
@@ -242,6 +255,7 @@ export default function ReviewDetailPage() {
           />
         ) : null}
       </Card>
+      </Reveal>
     </div>
   )
 }

@@ -13,7 +13,7 @@ export default function ReviewCard({
   showShop?: boolean
 }) {
   return (
-    <Card className="tl-card tl-rise" styles={{ body: { padding: 18 } }}>
+    <Card className="tl-card" styles={{ body: { padding: 18 } }}>
       <div
         style={{
           display: 'flex',

@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react'
 import { Avatar, Button, Dropdown, Layout, Space, message } from 'antd'
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import type { MenuProps } from 'antd'
 import { useAuthStore } from '../../store/authStore'
 import { palette, contentWidth } from '../../styles/tokens'
+import { PageTransition } from '../motion'
 
 const { Header, Content, Footer } = Layout
 
@@ -27,6 +29,15 @@ export default function MainLayout() {
         ? '/shops'
         : location.pathname
 
+  // 顶栏滚动阴影：向下滚动后增暖色细影，停在顶部时收起
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
   const handleLogout = () => {
     logout()
     message.success('已退出登录')
@@ -50,6 +61,8 @@ export default function MainLayout() {
           paddingInline: 0,
           background: palette.surface,
           borderBottom: `1px solid ${palette.rule}`,
+          transition: 'box-shadow 200ms ease',
+          boxShadow: scrolled ? '0 6px 18px rgba(36, 26, 20, 0.06)' : 'none',
         }}
       >
         <div
@@ -67,12 +80,12 @@ export default function MainLayout() {
           <Space size={36} align="center">
             <Link
               to="/"
+              className="tl-brand"
               style={{
                 fontFamily: 'var(--font-sc)',
                 fontSize: 22,
                 fontWeight: 700,
                 color: palette.appetite,
-                letterSpacing: '0.02em',
                 whiteSpace: 'nowrap',
               }}
             >
@@ -96,6 +109,7 @@ export default function MainLayout() {
                     {item.label}
                     {active && (
                       <span
+                        className="tl-nav-underline"
                         style={{
                           position: 'absolute',
                           left: 6,
@@ -140,7 +154,7 @@ export default function MainLayout() {
       </Header>
 
       <Content style={{ maxWidth: contentWidth, margin: '0 auto', width: '100%', padding: '28px 24px 48px' }}>
-        <Outlet />
+        <PageTransition />
       </Content>
 
       <Footer

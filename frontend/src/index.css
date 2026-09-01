@@ -118,21 +118,6 @@ img {
   margin: 0;
 }
 
-/* 卡片入场（尊重 reduced-motion） */
-@keyframes tl-rise {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-.tl-rise {
-  animation: tl-rise 240ms ease both;
-}
-
 /* 卡片悬浮：轻微上抬 + 暖影（搭配 className="tl-card"） */
 .tl-card {
   transition:
@@ -142,6 +127,176 @@ img {
 .tl-card:hover {
   transform: translateY(-3px);
   box-shadow: var(--shadow-hover);
+}
+
+/* —— 动效原语 —— 统一语调：expo-out "settle"，颜色一律取自色板 rgba（同 ::selection 写法） */
+
+/* 滚动入场：默认隐藏，--shown 时 0→1 上升淡入；交错延迟由 JS 通过 transitionDelay 注入 */
+.tl-reveal {
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.tl-reveal--shown {
+  opacity: 1;
+  transform: none;
+}
+
+/* 页面切换：路由 key 变化触发 remount，整体淡入上浮 */
+@keyframes tl-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.tl-page-in {
+  animation: tl-page-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 认证页品牌字标：淡入 + 字距收紧 */
+@keyframes tl-brand-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+    letter-spacing: 0.06em;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    letter-spacing: 0.02em;
+  }
+}
+.tl-brand-in {
+  animation: tl-brand-in 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 顶栏品牌字标：hover 收一下字距，静态时基础字距由 CSS 给（移除原内联 letterSpacing） */
+.tl-brand {
+  letter-spacing: 0.02em;
+  transition: letter-spacing 200ms ease;
+}
+.tl-brand:hover {
+  letter-spacing: 0.04em;
+}
+
+/* 认证页 eyebrow：品牌之后滑入 */
+@keyframes tl-eyebrow-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.tl-eyebrow-in {
+  animation: tl-eyebrow-in 360ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+}
+
+/* 认证卡片：呼吸入场 */
+@keyframes tl-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.tl-auth-card {
+  animation: tl-card-in 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 认证表单字段级联：nth-child 递增延迟（表单项固定≤4，CSS-only 即够） */
+.tl-auth-form .ant-form-item {
+  animation: tl-card-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.tl-auth-form .ant-form-item:nth-child(1) {
+  animation-delay: 180ms;
+}
+.tl-auth-form .ant-form-item:nth-child(2) {
+  animation-delay: 240ms;
+}
+.tl-auth-form .ant-form-item:nth-child(3) {
+  animation-delay: 300ms;
+}
+.tl-auth-form .ant-form-item:nth-child(4) {
+  animation-delay: 360ms;
+}
+
+/* 顶栏 active 下划线：左侧 scaleX 0→1 划入 */
+@keyframes tl-draw-underline {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.tl-nav-underline {
+  transform-origin: left center;
+  animation: tl-draw-underline 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 按钮按压回缩（仅显式加 .tl-press 的主 CTA） */
+.tl-press {
+  transition: transform 90ms ease;
+}
+.tl-press:active {
+  transform: scale(0.96);
+}
+
+/* 杂志式封面悬浮：AntD Card cover 裁切 + 封面图/兜底缓慢放大（保留 AntD 原圆角，不引入包裹 div） */
+.tl-zoomable .ant-card-cover {
+  overflow: hidden;
+}
+.tl-zoomable .ant-card-cover > * {
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tl-zoomable:hover .ant-card-cover > * {
+  transform: scale(1.06);
+}
+
+/* 点赞/关注 成功一次性心爆：scale 1→1.3→1，靠 key 变化重放 */
+@keyframes tl-heartburst {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.tl-heartburst {
+  animation: tl-heartburst 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 暖色聚焦环：搜索/输入聚焦时食欲红柔光（tl-field 可直接加在 Input 上、或包裹 Input） */
+.tl-field:focus-within,
+.tl-field .ant-input-affix-wrapper:focus-within,
+.tl-field .ant-input:focus,
+.tl-field .ant-select-focused .ant-select-selector {
+  box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.14);
+}
+
+/* 暖光氛围：认证页背景左上暖晕（食欲红极淡） */
+.tl-aura {
+  background: radial-gradient(
+    58% 48% at 22% 16%,
+    rgba(200, 16, 46, 0.08),
+    transparent 70%
+  );
 }
 
 /* 分页当前页：红底白字（修正 Token 设红底后数字仍为红色、红叠红不可读） */
@@ -165,5 +320,18 @@ img {
   }
   .tl-card:hover {
     transform: none;
+  }
+  /* 显式保证内容可见，避免 IO 与动效叠加下的隐藏残留 */
+  .tl-reveal,
+  .tl-reveal--shown {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .tl-zoomable:hover .ant-card-cover > *,
+  .tl-press:active {
+    transform: none !important;
+  }
+  .tl-brand:hover {
+    letter-spacing: 0.02em;
   }
 }

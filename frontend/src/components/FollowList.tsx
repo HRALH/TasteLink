@@ -5,6 +5,7 @@ import type { PageResult, UserVO } from '../types/api'
 import { DEFAULT_PAGE, DEFAULT_SIZE } from '../utils/constants'
 import UserCard from './UserCard'
 import SectionTitle from './editorial/SectionTitle'
+import { Reveal } from './motion'
 
 /** 关注/粉丝列表复用组件 */
 export default function FollowList({
@@ -30,18 +31,22 @@ export default function FollowList({
 
   return (
     <div>
-      <SectionTitle eyebrow={mode === 'followings' ? 'FOLLOWING' : 'FOLLOWERS'} size="sm">
-        {mode === 'followings' ? '关注列表' : '粉丝列表'}
-      </SectionTitle>
+      <Reveal>
+        <SectionTitle eyebrow={mode === 'followings' ? 'FOLLOWING' : 'FOLLOWERS'} size="sm">
+          {mode === 'followings' ? '关注列表' : '粉丝列表'}
+        </SectionTitle>
+      </Reveal>
       {loading ? (
         <Skeleton active />
       ) : !data?.records?.length ? (
         <Empty description={mode === 'followings' ? '暂无关注' : '暂无粉丝'} />
       ) : (
         <>
-          {data.records.map((u) => (
-            <UserCard key={u.id} user={u} />
-          ))}
+          <Reveal key={`list-${mode}-${page}`}>
+            {data.records.map((u) => (
+              <UserCard key={u.id} user={u} />
+            ))}
+          </Reveal>
           <Pagination
             style={{ marginTop: 20, textAlign: 'center' }}
             current={page}

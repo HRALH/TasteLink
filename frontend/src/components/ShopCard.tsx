@@ -14,9 +14,9 @@ interface ShopCardProps {
 /** 店铺卡片：菜单卡 —— 封面 + 暖金分类 eyebrow + 宋体店名 + 发丝线 + 评分批注 */
 export default function ShopCard({ shop, rank }: ShopCardProps) {
   return (
-    <Link to={`/shops/${shop.id}`} className="tl-rise" style={{ display: 'block', height: '100%' }}>
+    <Link to={`/shops/${shop.id}`} style={{ display: 'block', height: '100%' }}>
       <Card
-        className="tl-card"
+        className="tl-card tl-zoomable"
         cover={
           shop.coverUrl ? (
             <img src={shop.coverUrl} alt={shop.name} style={{ height: 160, objectFit: 'cover' }} />

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Button, Form, Input, message } from 'antd'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import AuthShell from '../../components/AuthShell'
@@ -10,8 +11,10 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const login = useAuthStore((s) => s.login)
+  const [submitting, setSubmitting] = useState(false)
 
   const onFinish = async (values: LoginBody) => {
+    setSubmitting(true)
     try {
       const res = await authApi.login(values)
       login(res.token, {
@@ -25,19 +28,28 @@ export default function LoginPage() {
       navigate(redirect ? decodeURIComponent(redirect) : '/', { replace: true })
     } catch {
       // 错误提示已由 request 拦截器统一处理
+    } finally {
+      setSubmitting(false)
     }
   }
 
   return (
     <AuthShell title="登录">
-      <Form form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>
+      <Form form={form} layout="vertical" onFinish={onFinish} requiredMark={false} className="tl-auth-form">
         <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
           <Input placeholder="用户名" autoComplete="username" />
         </Form.Item>
         <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}>
           <Input.Password placeholder="密码" autoComplete="current-password" />
         </Form.Item>
-        <Button type="primary" htmlType="submit" block shape="round">
+        <Button
+          type="primary"
+          htmlType="submit"
+          block
+          shape="round"
+          loading={submitting}
+          className="tl-press"
+        >
           登录
         </Button>
       </Form>

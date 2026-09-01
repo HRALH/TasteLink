@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Button, Form, Input, message } from 'antd'
 import { Link, useNavigate } from 'react-router-dom'
 import AuthShell from '../../components/AuthShell'
@@ -28,20 +29,24 @@ const passwordRules = [
 export default function RegisterPage() {
   const [form] = Form.useForm<RegisterFormValues>()
   const navigate = useNavigate()
+  const [submitting, setSubmitting] = useState(false)
 
   const onFinish = async (values: RegisterFormValues) => {
+    setSubmitting(true)
     try {
       await authApi.register({ username: values.username, password: values.password })
       message.success('注册成功，请登录')
       navigate('/login', { replace: true })
     } catch {
       // 错误提示已由 request 拦截器统一处理（如用户名已存在 40901）
+    } finally {
+      setSubmitting(false)
     }
   }
 
   return (
     <AuthShell title="注册">
-      <Form form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>
+      <Form form={form} layout="vertical" onFinish={onFinish} requiredMark={false} className="tl-auth-form">
         <Form.Item
           name="username"
           label="用户名"
@@ -73,7 +78,14 @@ export default function RegisterPage() {
         >
           <Input.Password placeholder="再次输入密码" autoComplete="new-password" />
         </Form.Item>
-        <Button type="primary" htmlType="submit" block shape="round">
+        <Button
+          type="primary"
+          htmlType="submit"
+          block
+          shape="round"
+          loading={submitting}
+          className="tl-press"
+        >
           注册
         </Button>
       </Form>

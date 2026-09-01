@@ -16,6 +16,8 @@ import { Link, useParams } from 'react-router-dom'
 import ReviewCard from '../../components/ReviewCard'
 import FollowButton from '../../components/FollowButton'
 import SectionTitle from '../../components/editorial/SectionTitle'
+import { Reveal } from '../../components/motion'
+import { staggerDelay } from '../../utils/motion'
 import { userApi } from '../../api/user'
 import { palette } from '../../styles/tokens'
 import type { PageResult, ReviewVO, UserVO } from '../../types/api'
@@ -61,64 +63,73 @@ export default function UserHomePage() {
 
   return (
     <div>
-      <Card className="tl-card" style={{ marginBottom: 24 }}>
-        <Space size={20} align="start" wrap>
-          <Avatar size={80} src={user.avatarUrl} style={{ background: palette.rule }}>
-            {user.nickname?.[0]}
-          </Avatar>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <h1 className="editorial-title" style={{ fontSize: 24, margin: '0 0 4px' }}>
-              {user.nickname}
-            </h1>
-            <Paragraph style={{ color: palette.muted, margin: 0 }}>
-              {user.bio || '这个人很神秘，什么都没留下'}
-            </Paragraph>
-            <Row gutter={36} style={{ marginTop: 16 }}>
-              <Col>
-                <Link to={`/users/${userId}/followings`}>
-                  <Statistic title="关注" value={user.followingCount} />
-                </Link>
-              </Col>
-              <Col>
-                <Link to={`/users/${userId}/followers`}>
-                  <Statistic title="粉丝" value={user.followerCount} />
-                </Link>
-              </Col>
-              <Col>
-                <Statistic title="点评" value={user.reviewCount} />
-              </Col>
-            </Row>
-          </div>
-          {isMe ? (
-            <Link to="/me">
-              <Button shape="round">编辑资料</Button>
-            </Link>
-          ) : (
-            <FollowButton
-              userId={user.id}
-              hasFollowed={user.hasFollowed}
-              onChange={(f) =>
-                setUser((u) =>
-                  u
-                    ? { ...u, hasFollowed: f, followerCount: u.followerCount + (f ? 1 : -1) }
-                    : u,
-                )
-              }
-            />
-          )}
-        </Space>
-      </Card>
+      <Reveal style={{ marginBottom: 24 }}>
+        <Card className="tl-card">
+          <Space size={20} align="start" wrap>
+            <Avatar size={80} src={user.avatarUrl} style={{ background: palette.rule }}>
+              {user.nickname?.[0]}
+            </Avatar>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <h1 className="editorial-title" style={{ fontSize: 24, margin: '0 0 4px' }}>
+                {user.nickname}
+              </h1>
+              <Paragraph style={{ color: palette.muted, margin: 0 }}>
+                {user.bio || '这个人很神秘，什么都没留下'}
+              </Paragraph>
+              <Row gutter={36} style={{ marginTop: 16 }}>
+                <Col>
+                  <Link to={`/users/${userId}/followings`}>
+                    <Statistic title="关注" value={user.followingCount} />
+                  </Link>
+                </Col>
+                <Col>
+                  <Link to={`/users/${userId}/followers`}>
+                    <Statistic title="粉丝" value={user.followerCount} />
+                  </Link>
+                </Col>
+                <Col>
+                  <Statistic title="点评" value={user.reviewCount} />
+                </Col>
+              </Row>
+            </div>
+            {isMe ? (
+              <Link to="/me">
+                <Button shape="round">编辑资料</Button>
+              </Link>
+            ) : (
+              <FollowButton
+                userId={user.id}
+                hasFollowed={user.hasFollowed}
+                onChange={(f) =>
+                  setUser((u) =>
+                    u
+                      ? { ...u, hasFollowed: f, followerCount: u.followerCount + (f ? 1 : -1) }
+                      : u,
+                  )
+                }
+              />
+            )}
+          </Space>
+        </Card>
+      </Reveal>
 
-      <SectionTitle eyebrow="REVIEWS">Ta的点评</SectionTitle>
+      <Reveal>
+        <SectionTitle eyebrow="REVIEWS">Ta的点评</SectionTitle>
+      </Reveal>
       {loadingReviews ? (
         <Skeleton active />
       ) : !reviews?.records?.length ? (
         <Empty description="暂无点评" />
       ) : (
         <>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {reviews.records.map((r) => (
-              <ReviewCard key={r.id} review={r} />
+          <div
+            style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+            key={`reviews-${page}`}
+          >
+            {reviews.records.map((r, i) => (
+              <Reveal key={r.id} delay={staggerDelay(i)}>
+                <ReviewCard review={r} />
+              </Reveal>
             ))}
           </div>
           <Pagination

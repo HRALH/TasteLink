@@ -3,6 +3,8 @@ import { Card, Col, Empty, Input, Pagination, Row, Segmented, Select, Skeleton, 
 import { SearchOutlined } from '@ant-design/icons'
 import ShopCard from '../../components/ShopCard'
 import SectionTitle from '../../components/editorial/SectionTitle'
+import { Reveal } from '../../components/motion'
+import { staggerDelay } from '../../utils/motion'
 import { shopApi } from '../../api/shop'
 import type { CategoryVO, PageResult, ShopVO } from '../../types/api'
 import { CITIES, DEFAULT_PAGE, DEFAULT_SIZE, ShopSort } from '../../utils/constants'
@@ -54,54 +56,62 @@ export default function ShopListPage() {
     { label: '评分', value: ShopSort.RATING },
   ]
 
+  // 任意筛选/翻页变化即重建 key，令卡片网格 remount 重放交错入场
+  const resultKey = `${keyword ?? 'all'}-${categoryId}-${city}-${sortBy}-${page}`
+
   return (
     <div>
-      <SectionTitle eyebrow="DISCOVER" size="lg">
-        探索店铺
-      </SectionTitle>
+      <Reveal>
+        <SectionTitle eyebrow="DISCOVER" size="lg">
+          探索店铺
+        </SectionTitle>
+      </Reveal>
 
-      <Card className="tl-card" styles={{ body: { padding: 16 } }} style={{ marginBottom: 20 }}>
-        <Space size={12} wrap>
-          <Input
-            placeholder="搜索店铺名称"
-            prefix={<SearchOutlined />}
-            value={keywordInput}
-            onChange={(e) => setKeywordInput(e.target.value)}
-            onPressEnter={() => {
-              setKeyword(keywordInput || undefined)
-              resetPage()
-            }}
-            style={{ width: 220 }}
-            allowClear
-          />
-          <Select
-            value={categoryId}
-            options={categoryOptions}
-            onChange={(v) => {
-              setCategoryId(v)
-              resetPage()
-            }}
-            style={{ width: 140 }}
-          />
-          <Select
-            value={city}
-            options={cityOptions}
-            onChange={(v) => {
-              setCity(v)
-              resetPage()
-            }}
-            style={{ width: 120 }}
-          />
-          <Segmented
-            options={sortOptions}
-            value={sortBy}
-            onChange={(v) => {
-              setSortBy(v as string)
-              resetPage()
-            }}
-          />
-        </Space>
-      </Card>
+      <Reveal style={{ marginBottom: 20 }}>
+        <Card className="tl-card" styles={{ body: { padding: 16 } }}>
+          <Space size={12} wrap>
+            <Input
+              className="tl-field"
+              placeholder="搜索店铺名称"
+              prefix={<SearchOutlined />}
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
+              onPressEnter={() => {
+                setKeyword(keywordInput || undefined)
+                resetPage()
+              }}
+              style={{ width: 220 }}
+              allowClear
+            />
+            <Select
+              value={categoryId}
+              options={categoryOptions}
+              onChange={(v) => {
+                setCategoryId(v)
+                resetPage()
+              }}
+              style={{ width: 140 }}
+            />
+            <Select
+              value={city}
+              options={cityOptions}
+              onChange={(v) => {
+                setCity(v)
+                resetPage()
+              }}
+              style={{ width: 120 }}
+            />
+            <Segmented
+              options={sortOptions}
+              value={sortBy}
+              onChange={(v) => {
+                setSortBy(v as string)
+                resetPage()
+              }}
+            />
+          </Space>
+        </Card>
+      </Reveal>
 
       {loading ? (
         <Skeleton active />
@@ -109,10 +119,12 @@ export default function ShopListPage() {
         <Empty description="没有找到符合条件的店铺" />
       ) : (
         <>
-          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-            {result.records.map((s) => (
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }} key={resultKey}>
+            {result.records.map((s, i) => (
               <Col key={s.id} xs={24} sm={12} md={8}>
-                <ShopCard shop={s} />
+                <Reveal delay={staggerDelay(i)} style={{ height: '100%' }}>
+                  <ShopCard shop={s} />
+                </Reveal>
               </Col>
             ))}
           </Row>
