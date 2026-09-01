@@ -47,11 +47,6 @@ public class UserServiceImpl implements UserService {
         if (!PASSWORD_PATTERN.matcher(req.getPassword()).matches()) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "密码需至少 8 位且包含字母与数字");
         }
-        Long exists = userMapper.selectCount(new LambdaQueryWrapper<User>()
-                .eq(User::getUsername, req.getUsername()));
-        if (exists != null && exists > 0) {
-            throw new BusinessException(ResultCode.USER_EXISTS);
-        }
         User user = new User();
         user.setUsername(req.getUsername());
         user.setPassword(passwordEncoder.encode(req.getPassword()));
@@ -117,11 +112,6 @@ public class UserServiceImpl implements UserService {
         Long currentId = SecurityContextHelper.getCurrentUserId();
         boolean hasFollowed = currentId != null && !currentId.equals(id) && hasFollowed(currentId, id);
         return toProfileVO(user, hasFollowed);
-    }
-
-    @Override
-    public User getUserEntity(Long id) {
-        return userMapper.selectById(id);
     }
 
     @Override
