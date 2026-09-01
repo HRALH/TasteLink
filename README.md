@@ -40,7 +40,7 @@ JDK 17+、Maven(系统 `mvn`,无 wrapper)、Node 20+、MySQL 8。
 ### 1. 克隆
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/HRALH/TasteLink.git
 cd TasteLink
 ```
 
