@@ -121,6 +121,27 @@ public class ShopServiceImpl implements ShopService {
                 .toList();
     }
 
+    @Override
+    public List<ShopVO> toVOsByIds(List<Long> orderedIds) {
+        if (orderedIds == null || orderedIds.isEmpty()) {
+            return List.of();
+        }
+        // 仅 status=NORMAL（selectBatchIds 不带 status 过滤，故显式 wrapper）
+        List<Shop> shops = shopMapper.selectList(new LambdaQueryWrapper<Shop>()
+                .in(Shop::getId, orderedIds)
+                .eq(Shop::getStatus, Constants.STATUS_NORMAL));
+        Map<Long, Shop> byId = shops.stream().collect(Collectors.toMap(Shop::getId, s -> s));
+        Map<Long, String> nameMap = categoryNameMap(shops);
+        // 按入参 id 序重排（保 ES/缓存等关联性顺序），缺失/已删的 id 跳过
+        return orderedIds.stream()
+                .map(id -> {
+                    Shop s = byId.get(id);
+                    return s == null ? null : toShopVO(s, nameMap.get(s.getCategoryId()));
+                })
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
     private ShopVO toShopVO(Shop s, String categoryName) {
         return ShopVO.builder()
                 .id(s.getId())

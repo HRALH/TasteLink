@@ -11,9 +11,11 @@ import com.tastelink.dto.response.ShopDetailVO;
 import com.tastelink.dto.response.ShopVO;
 import com.tastelink.security.SecurityContextHelper;
 import com.tastelink.service.ReviewService;
+import com.tastelink.service.SearchService;
 import com.tastelink.service.ShopService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,6 +36,7 @@ public class ShopController {
 
     private final ShopService shopService;
     private final ReviewService reviewService;
+    private final SearchService searchService;
 
     @GetMapping
     public R<PageResult<ShopVO>> listShops(
@@ -42,6 +45,13 @@ public class ShopController {
             @RequestParam(required = false) String city,
             @RequestParam(required = false) String sortBy,
             PageQuery pq) {
+        // v2 Phase D：keyword 走 ES；ES 失联/禁用返回 null 则回退 MySQL LIKE（降级无感）
+        if (StringUtils.hasText(keyword)) {
+            PageResult<ShopVO> es = searchService.searchByKeyword(keyword, categoryId, city, pq);
+            if (es != null) {
+                return R.ok(es);
+            }
+        }
         return R.ok(shopService.listShops(keyword, categoryId, city, sortBy, pq));
     }
 

@@ -168,14 +168,14 @@
 
 | 参数 | 必填 | 说明 |
 |---|---|---|
-| keyword | 否 | 店铺名模糊搜索 |
+| keyword | 否 | 关键词搜索：v2 Phase D 起走 **Elasticsearch**（`name` 字段 + relevance 排序）；ES 失联/禁用自动**降级回 MySQL `LIKE name`**，前端无感。中文分词需 IK 插件，未装时中文连续命中弱（见 `docs/02 §4.9`） |
 | categoryId | 否 | 分类 id |
 | city | 否 | 城市 |
-| sortBy | 否 | 默认 `review_count`（热度）；可扩展 `rating` |
+| sortBy | 否 | 默认 `review_count`（热度）；可扩展 `rating`。注：`keyword` 命中 ES 时按 relevance 排序，忽略 `sortBy` |
 | page | 否 | 默认 1 |
 | size | 否 | 默认 10 |
 
-响应 `data`：`PageResult<ShopVO>`
+响应 `data`：`PageResult<ShopVO>`（命中结果由 MySQL 回查组装，计数/分类名与库一致）
 
 #### GET `/api/v1/shops/{shopId}`（公开）
 店铺详情。

@@ -54,6 +54,12 @@ spring:
           max-attempts: ${RABBIT_RETRY_MAX_ATTEMPTS:3}
           initial-interval: 1000ms
           multiplier: 2.0
+  # Elasticsearch（v2 Phase D 店铺关键词检索；SR RestClient 懒初始化，未起 ES 不影响启动，
+  # 仅 keyword 检索降级回 MySQL LIKE）
+  elasticsearch:
+    uris: ${ES_URIS:http://localhost:9200}
+    connection-timeout: 5s
+    socket-timeout: 10s
   servlet:
     multipart:
       max-file-size: 10MB
@@ -122,3 +128,9 @@ tastelink:
     reconcile-cron: ${RABBIT_CLEANUP_RECON_CRON:0 */2 * * * *}
     reconcile-grace-ms: ${RABBIT_CLEANUP_RECON_GRACE_MS:30000}
     retry-max-attempts: ${RABBIT_RETRY_MAX_ATTEMPTS:3}
+  # v2 Phase D：店铺关键词 ES 检索（Canal 增量同步延后，infra 待办 B；此处以定时全量重建兜底同步）
+  search:
+    # 总开关；关闭后 keyword 直接回退 MySQL LIKE，应用免连 ES 也能启动
+    enabled: ${SEARCH_ENABLED:true}
+    # 定时全量重建：以 MySQL status=1 店铺为准重灌 ES（修复漂移 + Canal 未到位时的唯一同步）
+    rebuild-cron: ${SEARCH_REBUILD_CRON:0 */10 * * * *}

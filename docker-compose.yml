@@ -31,3 +31,18 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:guest}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:guest}
     restart: unless-stopped
+
+  # Elasticsearch（v2 Phase D）：店铺关键词检索。单节点开箱即用，复用标准镜像（无 xpack 安全）。
+  # ⚠️ 中文分词需 IK 插件，本镜像默认不带——线上/联调用标准 analyzer 时中文连续 CJK 命中弱
+  #   （后端自动降级 MySQL LIKE 兜底）；补 IK 见 backend/docs/02 §4.9「infra 待办 A」，需
+  #   bin/elasticsearch-plugin install analysis-ik 并以 ik_max_word/ik_smart 重建索引。
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: tastelink-elasticsearch
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    restart: unless-stopped
