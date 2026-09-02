@@ -21,6 +21,7 @@ import com.tastelink.mapper.ReviewMapper;
 import com.tastelink.mapper.ShopMapper;
 import com.tastelink.mapper.UserMapper;
 import com.tastelink.security.SecurityContextHelper;
+import com.tastelink.service.HotRankService;
 import com.tastelink.service.ReviewService;
 import com.tastelink.utils.DateUtil;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +45,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewLikeMapper reviewLikeMapper;
     private final ShopMapper shopMapper;
     private final UserMapper userMapper;
+    private final HotRankService hotRankService;
 
     @Override
     public ReviewVO getDetail(Long reviewId) {
@@ -150,6 +153,32 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     public List<ReviewVO> hotReviews(String city, int limit) {
+        // 无城市筛选时优先走 Redis 全局热度缓存（Phase A）；其余/未命中/异常回退 MySQL
+        if (!StringUtils.hasText(city) && hotRankService.isCacheEnabled()) {
+            List<Long> ids = hotRankService.topReviewIds(limit);
+            if (ids != null && !ids.isEmpty()) {
+                Map<Long, Review> byId = reviewMapper.selectList(new LambdaQueryWrapper<Review>()
+                                .in(Review::getId, ids)
+                                .eq(Review::getStatus, Constants.STATUS_NORMAL))
+                        .stream().collect(Collectors.toMap(Review::getId, rv -> rv));
+                // 按缓存热度顺序还原；跳过因软删/不存在而缺失的 id
+                List<Review> ordered = new ArrayList<>();
+                for (Long id : ids) {
+                    Review rv = byId.get(id);
+                    if (rv != null) {
+                        ordered.add(rv);
+                    }
+                }
+                if (!ordered.isEmpty()) {
+                    return assemble(ordered, SecurityContextHelper.getCurrentUserId());
+                }
+            }
+        }
+        return hotReviewsFromDb(city, limit);
+    }
+
+    /** MySQL 热度排序（缓存禁用 / 城市筛选 / 缓存未命中时走此路径）。 */
+    private List<ReviewVO> hotReviewsFromDb(String city, int limit) {
         Page<Review> page = new Page<>(1, limit, false);
         LambdaQueryWrapper<Review> w = new LambdaQueryWrapper<Review>()
                 .eq(Review::getStatus, Constants.STATUS_NORMAL);

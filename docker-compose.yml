@@ -1,0 +1,18 @@
+# =====================================================================
+# TasteLink 本地中间件（v2 阶段引入，按需追加 rabbitmq / elasticsearch / canal）
+# 仅列当前阶段真正新增的组件；本地 MySQL 请沿用你现有的 localhost:3306 实例，
+# 不在此 compose 内重复起一个，避免端口冲突与已有数据错位。
+#
+# 用法：
+#   docker compose up -d redis          # 起 Redis
+#   docker compose down                 # 停并清理
+# =====================================================================
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: tastelink-redis
+    ports:
+      - "6379:6379"
+    # 如需密码，取消下一行并同步 application-local.yml 的 spring.data.redis.password
+    # command: redis-server --requirepass yourpassword
+    restart: unless-stopped

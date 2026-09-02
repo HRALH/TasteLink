@@ -7,6 +7,12 @@ spring:
     url: jdbc:mysql://localhost:3306/tastelink?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: YOUR_LOCAL_DB_PASSWORD
+  # v2 Phase A：本地 Redis（docker compose up -d redis 起一个无密码实例即可）
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: # 无密码留空；若用 --requirepass 则填入
 
 tastelink:
   jwt:
@@ -20,3 +26,6 @@ tastelink:
       access-key-secret: YOUR_OSS_SK
       bucket: your-bucket-name
       domain: https://your-bucket.oss-cn-hangzhou.aliyuncs.com
+  # 想临时关闭热度缓存、回退纯 MySQL 排序时设为 false
+  rank:
+    cache-enabled: true

@@ -20,12 +20,15 @@ import com.tastelink.mapper.ReviewLikeMapper;
 import com.tastelink.mapper.ReviewMapper;
 import com.tastelink.mapper.ShopMapper;
 import com.tastelink.mapper.UserMapper;
+import com.tastelink.service.HotRankService;
 import com.tastelink.service.InteractionService;
 import com.tastelink.utils.DateUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
 import java.util.Map;
@@ -40,6 +43,7 @@ public class InteractionServiceImpl implements InteractionService {
     private final ReviewCommentMapper reviewCommentMapper;
     private final ShopMapper shopMapper;
     private final UserMapper userMapper;
+    private final HotRankService hotRankService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -57,8 +61,10 @@ public class InteractionServiceImpl implements InteractionService {
             shopMapper.update(null, new LambdaUpdateWrapper<Shop>()
                     .eq(Shop::getId, review.getShopId())
                     .setSql("like_count = like_count + 1"));
+            // 热度缓存：仅在真正新增点赞（非幂等重复）后更新；于事务提交后执行，DB 回滚则不增（Phase A）
+            afterCommit(() -> hotRankService.onLike(reviewId));
         } catch (DuplicateKeyException dup) {
-            // 已点赞：幂等返回当前计数，不报错
+            // 已点赞：幂等返回当前计数，不报错（缓存亦不动）
         }
         Integer count = reviewMapper.selectById(reviewId).getLikeCount();
         return new LikeCountVO(count);
@@ -78,6 +84,8 @@ public class InteractionServiceImpl implements InteractionService {
             shopMapper.update(null, new LambdaUpdateWrapper<Shop>()
                     .eq(Shop::getId, review.getShopId())
                     .setSql("like_count = GREATEST(0, like_count - 1)"));
+            // 仅在确实取消了点赞时回退缓存；事务提交后执行（Phase A）
+            afterCommit(() -> hotRankService.onUnlike(reviewId));
         }
         Integer count = reviewMapper.selectById(reviewId).getLikeCount();
         return new LikeCountVO(count);
@@ -146,5 +154,22 @@ public class InteractionServiceImpl implements InteractionService {
                 .content(c.getContent())
                 .createTime(DateUtil.format(c.getCreateTime()))
                 .build();
+    }
+
+    /**
+     * 事务提交后执行 action；无活动事务则立即执行（降级）。Redis 热度写不进 DB 事务，
+     * 保证 DB 回滚不会让缓存计数先增；Redis 自身异常在 {@link HotRankService} 内吞掉并靠对账修复。
+     */
+    private void afterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
     }
 }
