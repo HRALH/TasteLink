@@ -15,6 +15,8 @@ import UserHomePage from '../pages/user/UserHomePage'
 import FollowingsPage from '../pages/user/FollowingsPage'
 import FollowersPage from '../pages/user/FollowersPage'
 import MePage from '../pages/user/MePage'
+import AdminShopListPage from '../pages/admin/AdminShopListPage'
+import AdminShopEditPage from '../pages/admin/AdminShopEditPage'
 import { useAuthStore } from '../store/authStore'
 
 /**
@@ -26,6 +28,24 @@ function RequireAuth({ children }: { children: ReactNode }) {
   if (!isLoggedIn) {
     const redirect = encodeURIComponent(location.pathname + location.search)
     return <Navigate to={`/login?redirect=${redirect}`} replace />
+  }
+  return <>{children}</>
+}
+
+/**
+ * 路由守卫：管理员页（v2 FE-0）—— 未登录跳 /login（带 redirect），非管理员跳首页。
+ * 真正鉴权仍由后端 `/admin/**` hasRole('ADMIN') 强制（403）；此守卫仅做 UI 层前置拦截。
+ */
+export function RequireAdmin({ children }: { children: ReactNode }) {
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn)
+  const isAdmin = useAuthStore((s) => s.role === 'ADMIN')
+  const location = useLocation()
+  if (!isLoggedIn) {
+    const redirect = encodeURIComponent(location.pathname + location.search)
+    return <Navigate to={`/login?redirect=${redirect}`} replace />
+  }
+  if (!isAdmin) {
+    return <Navigate to="/" replace />
   }
   return <>{children}</>
 }
@@ -60,6 +80,22 @@ export default function AppRouter() {
             <RequireAuth>
               <MePage />
             </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/shops"
+          element={
+            <RequireAdmin>
+              <AdminShopListPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="/admin/shops/:id/edit"
+          element={
+            <RequireAdmin>
+              <AdminShopEditPage />
+            </RequireAdmin>
           }
         />
       </Route>

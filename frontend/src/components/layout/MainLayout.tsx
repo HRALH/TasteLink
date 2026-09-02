@@ -17,6 +17,7 @@ const NAV = [
 export default function MainLayout() {
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn)
   const userInfo = useAuthStore((s) => s.userInfo)
+  const isAdmin = useAuthStore((s) => s.role === 'ADMIN')
   const logout = useAuthStore((s) => s.logout)
   const navigate = useNavigate()
   const location = useLocation()
@@ -27,7 +28,9 @@ export default function MainLayout() {
       ? '/'
       : location.pathname.startsWith('/shops')
         ? '/shops'
-        : location.pathname
+        : location.pathname.startsWith('/admin')
+          ? '/admin'
+          : location.pathname
 
   // 顶栏滚动阴影：向下滚动后增暖色细影，停在顶部时收起
   const [scrolled, setScrolled] = useState(false)
@@ -92,7 +95,7 @@ export default function MainLayout() {
               TasteLink
             </Link>
             <nav style={{ display: 'flex', gap: 6 }} aria-label="主导航">
-              {NAV.map((item) => {
+              {(isAdmin ? [...NAV, { key: '/admin', label: '管理后台' }] : NAV).map((item) => {
                 const active = selectedKey === item.key
                 return (
                   <Link

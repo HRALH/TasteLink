@@ -9,6 +9,8 @@ export const Code = {
   UNAUTHORIZED: 401,
   FORBIDDEN: 403,
   NOT_FOUND: 404,
+  /** v2 乐观锁冲突（店铺并发覆盖）——后端 HTTP 409，前端弹刷新而非通用 toast */
+  SHOP_VERSION_CONFLICT: 409,
   USERNAME_EXISTS: 40901,
   ALREADY_LIKED: 40902,
   ALREADY_FOLLOWED: 40903,
