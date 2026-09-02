@@ -8,6 +8,7 @@ import com.tastelink.security.SecurityContextHelper;
 import com.tastelink.service.AdminShopService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -15,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 管理员后台接口（v2 Phase B）。
+ * 管理员后台接口（v2 Phase B 配置 + Phase C 删店）。
  * 路径前缀 {@code /api/v1/admin/**} 由 {@code SecurityConfig} 统一要求 hasRole('ADMIN')，
  * 故控制器内不再重复方法级鉴权；普通用户访问将得到 403。
  */
@@ -33,5 +34,16 @@ public class AdminShopController {
         // 确保登录态（虽 admin 规则已隐含 authenticated，不登录会被 SecurityConfig 401 拦下）
         SecurityContextHelper.requireCurrentUserId();
         return R.ok(adminShopService.updateShop(shopId, req));
+    }
+
+    /**
+     * 删除店铺（v2 Phase C）：标记下架+级联隐藏点评+回扣计数本事务内完成，
+     * 物理级联清理走延时消息（异步）。二次删返回 404（幂等口风）。
+     */
+    @DeleteMapping("/{shopId}")
+    public R<Void> deleteShop(@PathVariable Long shopId) {
+        SecurityContextHelper.requireCurrentUserId();
+        adminShopService.deleteShop(shopId);
+        return R.ok(null);
     }
 }

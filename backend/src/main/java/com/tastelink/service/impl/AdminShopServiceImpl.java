@@ -1,22 +1,36 @@
 package com.tastelink.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.tastelink.common.Constants;
 import com.tastelink.common.ResultCode;
 import com.tastelink.dto.request.UpdateShopRequest;
 import com.tastelink.dto.response.ShopDetailVO;
+import com.tastelink.entity.Review;
 import com.tastelink.entity.Shop;
 import com.tastelink.entity.ShopCategory;
+import com.tastelink.entity.User;
 import com.tastelink.exception.BusinessException;
+import com.tastelink.mapper.ReviewMapper;
 import com.tastelink.mapper.ShopCategoryMapper;
 import com.tastelink.mapper.ShopMapper;
+import com.tastelink.mapper.UserMapper;
 import com.tastelink.service.AdminShopService;
+import com.tastelink.service.ShopCleanupProducer;
 import com.tastelink.service.ShopService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 /**
- * 管理员后台服务实现（v2 Phase B）。
+ * 管理员后台服务实现（v2 Phase B 改店 / Phase C 删店）。
  * <p>
  * 乐观锁以 MyBatis-Plus {@link com.baomidou.mybatisplus.annotation.Version} 实现：
  * {@link ShopMapper#selectById(Object)} 载入的 shop 携带当前 version，{@link ShopMapper#updateById(Object)}
@@ -30,7 +44,10 @@ public class AdminShopServiceImpl implements AdminShopService {
 
     private final ShopMapper shopMapper;
     private final ShopCategoryMapper categoryMapper;
+    private final ReviewMapper reviewMapper;
+    private final UserMapper userMapper;
     private final ShopService shopService;
+    private final ShopCleanupProducer shopCleanupProducer;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -72,8 +89,58 @@ public class AdminShopServiceImpl implements AdminShopService {
             // 并发冲突：他人已在本次读取后提交，version 不符；要求调用方刷新后重试
             throw new BusinessException(ResultCode.SHOP_VERSION_CONFLICT);
         }
-        // 复用公开读路径的详情组装（含分类名与近期点评）；仅 status=1 的店铺可见详情，
-        // 管理员对下架店铺的编辑由 Phase C 软删补完，此处面向正常店铺。
         return shopService.getShopDetail(shopId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteShop(Long shopId) {
+        Shop shop = shopMapper.selectById(shopId);
+        if (shop == null || (shop.getStatus() != null && shop.getStatus() == Constants.STATUS_HIDDEN)) {
+            // 已删除/下架的店铺二次删除得 404（幂等口风）；不存在同样 404
+            throw new BusinessException(ResultCode.NOT_FOUND, "店铺不存在");
+        }
+        // 1）标记下架（走乐观锁，与并发改/删冲突 → 409 提示刷新）
+        shop.setStatus(Constants.STATUS_HIDDEN);
+        int affected = shopMapper.updateById(shop);
+        if (affected == 0) {
+            throw new BusinessException(ResultCode.SHOP_VERSION_CONFLICT);
+        }
+        // 2）级联隐藏该店正常点评 —— 即时从所有公开读路径消失（首页热度亦按 review.status=NORMAL 过滤）
+        List<Review> reviews = reviewMapper.selectList(new LambdaQueryWrapper<Review>()
+                .eq(Review::getShopId, shopId)
+                .eq(Review::getStatus, Constants.STATUS_NORMAL));
+        if (!reviews.isEmpty()) {
+            reviewMapper.update(null, new LambdaUpdateWrapper<Review>()
+                    .eq(Review::getShopId, shopId)
+                    .eq(Review::getStatus, Constants.STATUS_NORMAL)
+                    .set(Review::getStatus, Constants.STATUS_HIDDEN));
+            // 3）对称回扣发布用户 review_count（镜像 createReview 的 +1，按用户聚合累减，GREATEST 0 防负）
+            Map<Long, Long> perUser = reviews.stream()
+                    .collect(Collectors.groupingBy(Review::getUserId, Collectors.counting()));
+            perUser.forEach((uid, cnt) -> userMapper.update(null, new LambdaUpdateWrapper<User>()
+                    .eq(User::getId, uid)
+                    .setSql("review_count = GREATEST(0, review_count - " + cnt + ")")));
+        }
+        // 4）物删清理走延时 MQ 消费者；于此事务提交后投递，DB 回滚则不发
+        afterCommit(() -> shopCleanupProducer.send(shopId));
+    }
+
+    /**
+     * 事务提交后执行 action；无活动事务则立即执行（降级）。MQ 投递不进 DB 事务：保证标记事务回滚
+     * 不会发出脏消息；broker 故障由 {@link com.tastelink.service.ShopCleanupProducer} 内部吞掉，
+     * 经 {@code ScheduledShopCleanupReconcile} 对账补投递兜底。
+     */
+    private void afterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
     }
 }

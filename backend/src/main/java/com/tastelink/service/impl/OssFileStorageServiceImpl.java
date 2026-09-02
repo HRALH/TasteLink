@@ -65,4 +65,21 @@ public class OssFileStorageServiceImpl implements FileStorageService {
             // 删除失败不影响主流程
         }
     }
+
+    @Override
+    public String ossKeyFromUrl(String url) {
+        if (!StringUtils.hasText(url)) {
+            return null;
+        }
+        // upload 拼装：domain 设了用 domain + "/" + objectKey，否则 https://{bucket}.{endpoint}/ + objectKey
+        String domain = props.getOss().getDomain();
+        String prefix;
+        if (StringUtils.hasText(domain)) {
+            String d = domain.endsWith("/") ? domain.substring(0, domain.length() - 1) : domain;
+            prefix = d + "/";
+        } else {
+            prefix = "https://" + props.getOss().getBucket() + "." + props.getOss().getEndpoint() + "/";
+        }
+        return url.startsWith(prefix) ? url.substring(prefix.length()) : null;
+    }
 }

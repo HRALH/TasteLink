@@ -17,6 +17,13 @@ public interface HotRankService {
     void onUnlike(Long reviewId);
 
     /**
+     * 点评被删除后调用：从全局热度 ZSet 移除该成员（v2 Phase C 删店清理点评时调用）。
+     * 与 {@link #onLike} / {@link #onUnlike} 对称——前者改分，本方法直接 zrem。
+     * 即便偶发遗漏，{@link #rebuild(int)} 仍会兜底。
+     */
+    void onDelete(Long reviewId);
+
+    /**
      * 取热门点评 id 列表（按热度倒序）。缓存未命中、禁用或访问异常时返回空列表，
      * 调用方据此回退 MySQL 查询。
      */

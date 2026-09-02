@@ -66,6 +66,19 @@ public class HotRankServiceImpl implements HotRankService {
     }
 
     @Override
+    public void onDelete(Long reviewId) {
+        if (!cacheEnabled || reviewId == null) {
+            return;
+        }
+        try {
+            // 物理删除点评后从 ZSet 摘除，保证首页热门列表不残留失效成员；rebuild 仍兜底
+            redis.opsForZSet().remove(key, String.valueOf(reviewId));
+        } catch (Exception e) {
+            log.warn("redis onDelete failed, will be reconciled later: reviewId={}, err={}", reviewId, e.getMessage());
+        }
+    }
+
+    @Override
     public List<Long> topReviewIds(int limit) {
         if (!cacheEnabled || limit <= 0) {
             return List.of();

@@ -349,6 +349,13 @@
 字段约束：`name`≤128、`city`≤64、`address`≤255、`phone`≤32、`coverUrl`≤512、`description`≤1000。
 规则：店铺不存在返回 404；`categoryId` 非空时校验分类存在性（不存在 400）；并发冲突返回 409 `SHOP_VERSION_CONFLICT`，前端应提示「内容已被他人修改，请刷新重试」。
 
+#### DELETE `/api/v1/admin/shops/{shopId}`（管理员，v2 Phase C）
+删除店铺（物理删路径 + RabbitMQ 延时清理）。
+
+请求体：无。
+响应 `data`：无（`R<Void>`）。
+规则：同事务内标记 `shop.status=0` + 级联 `review.status=0`（即时从公开读路径消失）+ 对称回扣发布用户 `review_count`；事务提交后投递延时清理消息，**到期由异步消费者物理级联删** `t_review_image → t_review_like → t_review_comment → t_review → t_shop`、删 OSS/本地图、从热度 ZSet 摘除。延迟窗口（默认 5s）便于「撤销误删」。并发改/删冲突仍返回 409 `SHOP_VERSION_CONFLICT`；二次删除返回 404（幂等口风）。broker 缺失时 afterCommit 不发消息，由对账调度直接物理清理（`tastelink.rabbitmq.enabled=false` 同此降级）。详见 `docs/02 §4.8`。
+
 ---
 
 ## 5. 数据模型（VO）

@@ -35,6 +35,25 @@ spring:
       password: ${REDIS_PASSWORD:}
       database: ${REDIS_DB:0}
       timeout: 2000ms
+  # RabbitMQ（v2 Phase C 店铺删除延时清理；AMQP 连接懒初始化，
+  # 未起 broker 不影响应用启动，仅删店后台路径降级为对账调度直接清理）
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    publisher-confirm-type: correlated   # ConfirmCallback 记 nack，靠对账补
+    publisher-returns: true              # ReturnsCallback 记路由失败
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false   # 重试耗尽后不回原队列，交由 cleanup-queue 的 x-dead-letter-exchange 路由进 DLQ
+        retry:
+          enabled: true                   # Spring AMQP 内置重试，耗尽后 reject→DLX→DLQ
+          max-attempts: ${RABBIT_RETRY_MAX_ATTEMPTS:3}
+          initial-interval: 1000ms
+          multiplier: 2.0
   servlet:
     multipart:
       max-file-size: 10MB
@@ -93,3 +112,13 @@ tastelink:
     rebuild-cron: ${RANK_REBUILD_CRON:0 */10 * * * *}
     # 重建时保留的 TopN 条数（避免 ZSet 无限增长）
     rebuild-top-size: ${RANK_REBUILD_TOP_SIZE:200}
+  # v2 Phase C：店铺删除延时清理（RabbitMQ，TTL + DLX 免插件方案）
+  rabbitmq:
+    # 总开关；关闭后删店 afterCommit 不发消息，改由对账调度直接物理清理（无延时窗口）
+    enabled: ${RABBIT_ENABLED:true}
+    # 延时窗口（「撤销误删」缓冲）；用作 delay-queue 的 x-message-ttl，固定值无 TTL 排序坑
+    cleanup-delay-ms: ${RABBIT_CLEANUP_DELAY_MS:5000}
+    # 滞留店对账：扫 status=0 且 update_time 已超 delay+grace 的店铺重清/重发
+    reconcile-cron: ${RABBIT_CLEANUP_RECON_CRON:0 */2 * * * *}
+    reconcile-grace-ms: ${RABBIT_CLEANUP_RECON_GRACE_MS:30000}
+    retry-max-attempts: ${RABBIT_RETRY_MAX_ATTEMPTS:3}
