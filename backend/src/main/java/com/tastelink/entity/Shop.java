@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.Version;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -49,6 +50,10 @@ public class Shop {
 
     /** 本店点评累计点赞数（冗余，热度加权用） */
     private Integer likeCount;
+
+    /** 乐观锁版本号（v2 Phase B，管理员并发改店铺防覆盖） */
+    @Version
+    private Integer version;
 
     /** 状态：1 正常 / 0 下架 */
     private Integer status;

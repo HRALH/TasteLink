@@ -36,6 +36,9 @@ public class User {
     /** 发布点评数（冗余） */
     private Integer reviewCount;
 
+    /** 角色：USER 普通 / ADMIN 管理员（v2 Phase B） */
+    private String role;
+
     /** 状态：1 正常 / 0 禁用 */
     private Integer status;
 

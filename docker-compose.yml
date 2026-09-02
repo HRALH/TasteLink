@@ -5,6 +5,7 @@
 #
 # 用法：
 #   docker compose up -d redis          # 起 Redis
+#   docker compose up -d rabbitmq       # 起 RabbitMQ（v2 Phase C 店铺延时清理）
 #   docker compose down                 # 停并清理
 # =====================================================================
 services:
@@ -15,4 +16,33 @@ services:
       - "6379:6379"
     # 如需密码，取消下一行并同步 application-local.yml 的 spring.data.redis.password
     # command: redis-server --requirepass yourpassword
+    restart: unless-stopped
+
+  # RabbitMQ（v2 Phase C）：店铺删除后走 TTL + DLX 走延时清理，复用标准镜像，
+  # 不依赖 rabbitmq_delayed_message_exchange 社区插件（固定延时无 TTL 排序坑，
+  # 且本地与 Testcontainers 均能直接跑官方 image）。生产投递语义见 backend RabbitMQConfig。
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: tastelink-rabbitmq
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # 管理界面（guest/guest）
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:guest}
+    restart: unless-stopped
+
+  # Elasticsearch（v2 Phase D）：店铺关键词检索。单节点开箱即用，复用标准镜像（无 xpack 安全）。
+  # ⚠️ 中文分词需 IK 插件，本镜像默认不带——线上/联调用标准 analyzer 时中文连续 CJK 命中弱
+  #   （后端自动降级 MySQL LIKE 兜底）；补 IK 见 backend/docs/02 §4.9「infra 待办 A」，需
+  #   bin/elasticsearch-plugin install analysis-ik 并以 ik_max_word/ik_smart 重建索引。
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: tastelink-elasticsearch
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
     restart: unless-stopped

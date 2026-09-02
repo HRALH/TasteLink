@@ -66,4 +66,14 @@ public class LocalFileStorageServiceImpl implements FileStorageService {
             // 删除失败不影响主流程
         }
     }
+
+    @Override
+    public String ossKeyFromUrl(String url) {
+        if (!StringUtils.hasText(url)) {
+            return null;
+        }
+        // upload 拼装形态：publicBaseUrl + urlPrefix + "/" + relative（relative=yyyy/MM/uuid.ext）
+        String prefix = props.getLocal().getPublicBaseUrl() + props.getLocal().getUrlPrefix() + "/";
+        return url.startsWith(prefix) ? url.substring(prefix.length()) : null;
+    }
 }

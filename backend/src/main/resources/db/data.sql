@@ -26,5 +26,9 @@ INSERT INTO `t_shop` (`name`, `category_id`, `city`, `address`, `phone`, `cover_
 ('樱日本料理',        4, '杭州', '杭州市西湖区龙井路1号',       '0571-88881234','','怀石日料');
 
 -- 演示用户(密码为占位 BCrypt 哈希,实际由后端注册接口生成,此处仅占位不可登录)
-INSERT INTO `t_user` (`username`, `password`, `nickname`, `bio`) VALUES
-('demo_user', '$2a$10$placeholder_bcrypt_hash_replace_me', '美食探店达人', '记录城市味道');
+INSERT INTO `t_user` (`username`, `password`, `nickname`, `bio`, `role`) VALUES
+('demo_user', '$2a$10$placeholder_bcrypt_hash_replace_me', '美食探店达人', '记录城市味道', 'USER'),
+-- 管理员占位账号(v2 Phase B):密码同样为占位哈希不可直接登录。真实管理员请先用
+-- POST /api/v1/auth/register 注册普通账号,再执行 UPDATE t_user SET role='ADMIN' WHERE username=?
+-- 提权(或用专用初始化脚本),避免在提交进仓库的种子文件中固化任何可用口令。
+('admin', '$2a$10$placeholder_bcrypt_hash_replace_me', '运营管理员', '', 'ADMIN');

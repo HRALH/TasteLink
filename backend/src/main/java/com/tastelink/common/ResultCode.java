@@ -21,7 +21,10 @@ public enum ResultCode {
     USER_EXISTS(40901, 200, "用户名已存在"),
     ALREADY_LIKED(40902, 200, "已点赞"),
     ALREADY_FOLLOWED(40903, 200, "已关注"),
-    CANNOT_FOLLOW_SELF(40904, 200, "不可关注自己");
+    CANNOT_FOLLOW_SELF(40904, 200, "不可关注自己"),
+
+    // v2 Phase B：管理员并发改店铺乐观锁冲突（HTTP 409，需前端提示刷新）
+    SHOP_VERSION_CONFLICT(409, 409, "店铺已被他人修改，请刷新重试");
 
     private final int code;
     private final int httpStatus;

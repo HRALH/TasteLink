@@ -24,6 +24,10 @@ public final class Constants {
     public static final int RATING_MIN = 1;
     public static final int RATING_MAX = 5;
 
+    /** 角色（v2 Phase B）：存 t_user.role / JWT role claim。 */
+    public static final String ROLE_USER = "USER";
+    public static final String ROLE_ADMIN = "ADMIN";
+
     /** 单条点评图片上限。 */
     public static final int REVIEW_IMAGE_MAX = 9;
 

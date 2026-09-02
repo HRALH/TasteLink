@@ -26,9 +26,9 @@
 ## 2. 鉴权机制
 
 ### 2.1 JWT 流程
-1. `POST /api/v1/auth/login` 成功后返回 `token`（含 userId/username，有效期 24h）
+1. `POST /api/v1/auth/login` 成功后返回 `token`（含 userId/username/role，有效期 24h）
 2. 前端将 token 存于 `localStorage`，并在请求拦截器注入 `Authorization: Bearer ${token}`
-3. 后端 `JwtAuthFilter` 解析 token，校验通过后写入 `SecurityContext`；服务层通过 `SecurityContextHelper.getCurrentUserId()` 获取登录人
+3. 后端 `JwtAuthFilter` 解析 token，校验通过后写入 `SecurityContext`（含角色 `ROLE_USER`/`ROLE_ADMIN`）；服务层通过 `SecurityContextHelper.getCurrentUserId()` 获取登录人
 4. token 缺失/过期/非法 → 写操作返回 401 `{code,message}`（公开接口不受影响）
 
 ### 2.2 白名单（无需登录）
@@ -41,6 +41,11 @@
 
 > 其余（写操作、`GET /api/v1/users/me`、`POST /api/v1/files/image`、关注/点赞/评论等）均需登录。
 > `/users/me` 规则需配置在 `/users/**` 通配规则之前。
+
+### 2.3 角色与后台权限（v2 Phase B）
+- `t_user.role` 取值 `USER`（普通，默认）/`ADMIN`（管理员）；`role` 随登录写入 JWT claim。
+- `SecurityConfig` 以 `requestMatchers("/api/v1/admin/**").hasRole("ADMIN")` 强制后台路径仅管理员可访问；`hasRole` 自动匹配 `ROLE_ADMIN`。该规则须置于 `anyRequest().authenticated()` 之前。普通用户访问后台接口返回 403。
+- 角色鉴权仅服务端把关，登录响应体 `LoginVO` 暂不暴露 `role`（后台前端界面见 `docs/07` 配套阶段）。
 
 ---
 
@@ -81,6 +86,7 @@
 | 40902 | 200 | 已点赞（幂等返回，业务成功） |
 | 40903 | 200 | 已关注（幂等返回，业务成功） |
 | 40904 | 200 | 不可关注自己 |
+| 409 | 409 | 店铺已被他人修改，请刷新重试（管理员并发改店铺，乐观锁冲突） |
 | 500 | 500 | 服务器内部错误（不泄露堆栈） |
 
 > 点赞/关注幂等场景：重复操作视为成功，返回当前计数或当前态，避免前端处理冲突。
@@ -162,14 +168,14 @@
 
 | 参数 | 必填 | 说明 |
 |---|---|---|
-| keyword | 否 | 店铺名模糊搜索 |
+| keyword | 否 | 关键词搜索：v2 Phase D 起走 **Elasticsearch**（`name` 字段 + relevance 排序）；ES 失联/禁用自动**降级回 MySQL `LIKE name`**，前端无感。中文分词需 IK 插件，未装时中文连续命中弱（见 `docs/02 §4.9`） |
 | categoryId | 否 | 分类 id |
 | city | 否 | 城市 |
-| sortBy | 否 | 默认 `review_count`（热度）；可扩展 `rating` |
+| sortBy | 否 | 默认 `review_count`（热度）；可扩展 `rating`。注：`keyword` 命中 ES 时按 relevance 排序，忽略 `sortBy` |
 | page | 否 | 默认 1 |
 | size | 否 | 默认 10 |
 
-响应 `data`：`PageResult<ShopVO>`
+响应 `data`：`PageResult<ShopVO>`（命中结果由 MySQL 回查组装，计数/分类名与库一致）
 
 #### GET `/api/v1/shops/{shopId}`（公开）
 店铺详情。
@@ -319,6 +325,36 @@
 { "url": "https://.../2026/08/uuid.jpg", "ossKey": "2026/08/uuid.jpg" }
 ```
 规则：仅登录用户；校验类型（jpg/png/webp 等）与大小；文件名 UUID 化；返回 `url` 可直接 `<img src>` 展示。本地兜底时返回后端静态资源 URL。
+
+### 4.9 管理员后台模块（v2 Phase B）
+
+> 路径前缀 `/api/v1/admin/**`，`SecurityConfig` 强制 `hasRole('ADMIN')`；普通用户访问返回 403，未登录返回 401。店铺删除（延时清理）见 `docs/06` Phase C。
+
+#### PUT `/api/v1/admin/shops/{shopId}`（管理员）
+编辑店铺资料。并发控制走乐观锁（`t_shop.version`）：服务端 `selectById` 载入当前版本 → 覆盖请求体中**非空/null 提供的字段** → `updateById` 自动校验版本；冲突则影响行数 0，返回 409。
+
+请求体（字段均可选，非空/null 才更新；`version` 不暴露，服务端自动处理）：
+```json
+{
+  "name": "辣府火锅(静安店)",
+  "categoryId": 1,
+  "city": "上海",
+  "address": "上海市静安区南京西路1788号",
+  "phone": "021-62880000",
+  "coverUrl": "https://.../cover.jpg",
+  "description": "人气重庆火锅"
+}
+```
+响应 `data`：`ShopDetailVO`（与 `GET /shops/{shopId}` 一致，含分类名与近期点评）。
+字段约束：`name`≤128、`city`≤64、`address`≤255、`phone`≤32、`coverUrl`≤512、`description`≤1000。
+规则：店铺不存在返回 404；`categoryId` 非空时校验分类存在性（不存在 400）；并发冲突返回 409 `SHOP_VERSION_CONFLICT`，前端应提示「内容已被他人修改，请刷新重试」。
+
+#### DELETE `/api/v1/admin/shops/{shopId}`（管理员，v2 Phase C）
+删除店铺（物理删路径 + RabbitMQ 延时清理）。
+
+请求体：无。
+响应 `data`：无（`R<Void>`）。
+规则：同事务内标记 `shop.status=0` + 级联 `review.status=0`（即时从公开读路径消失）+ 对称回扣发布用户 `review_count`；事务提交后投递延时清理消息，**到期由异步消费者物理级联删** `t_review_image → t_review_like → t_review_comment → t_review → t_shop`、删 OSS/本地图、从热度 ZSet 摘除。延迟窗口（默认 5s）便于「撤销误删」。并发改/删冲突仍返回 409 `SHOP_VERSION_CONFLICT`；二次删除返回 404（幂等口风）。broker 缺失时 afterCommit 不发消息，由对账调度直接物理清理（`tastelink.rabbitmq.enabled=false` 同此降级）。详见 `docs/02 §4.8`。
 
 ---
 

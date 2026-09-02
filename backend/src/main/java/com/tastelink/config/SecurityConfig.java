@@ -70,6 +70,8 @@ public class SecurityConfig {
                         .requestMatchers(GET, "/api/v1/reviews/**").permitAll()
                         // 首页公开
                         .requestMatchers(GET, "/api/v1/home", "/api/v1/home/**").permitAll()
+                        // 管理员后台（v2 Phase B）：置于 anyRequest 之前，仅 ADMIN 角色可访问
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         // 其余(写操作、PUT /users/me、上传、关注、点赞、评论等)需登录
                         .anyRequest().authenticated()
                 )

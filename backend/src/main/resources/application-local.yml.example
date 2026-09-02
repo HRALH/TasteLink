@@ -13,6 +13,16 @@ spring:
       host: localhost
       port: 6379
       password: # 无密码留空；若用 --requirepass 则填入
+  # v2 Phase C：本地 RabbitMQ（docker compose up -d rabbitmq 起默认 guest/guest 实例）
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    virtual-host: /
+  # v2 Phase D：本地 Elasticsearch（docker compose up -d elasticsearch 起单节点，9200）
+  elasticsearch:
+    uris: http://localhost:9200
 
 tastelink:
   jwt:
@@ -29,3 +39,9 @@ tastelink:
   # 想临时关闭热度缓存、回退纯 MySQL 排序时设为 false
   rank:
     cache-enabled: true
+  # v2 Phase C：店铺删除延时清理；RABBIT_ENABLED=false 则走对账调度直接清理（无 broker 也能删店）
+  rabbitmq:
+    enabled: true
+  # v2 Phase D：店铺关键词 ES 检索；SEARCH_ENABLED=false 则 keyword 回退 MySQL LIKE（无 ES 也能跑）
+  search:
+    enabled: true

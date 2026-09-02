@@ -54,6 +54,7 @@ public class UserServiceImpl implements UserService {
         user.setFollowingCount(0);
         user.setFollowerCount(0);
         user.setReviewCount(0);
+        user.setRole(Constants.ROLE_USER);
         user.setStatus(Constants.STATUS_NORMAL);
         try {
             userMapper.insert(user);
@@ -71,7 +72,7 @@ public class UserServiceImpl implements UserService {
         if (user == null || !passwordEncoder.matches(req.getPassword(), user.getPassword())) {
             throw new BusinessException(ResultCode.UNAUTHORIZED, "用户名或密码错误");
         }
-        String token = jwtUtil.generate(user.getId(), user.getUsername());
+        String token = jwtUtil.generate(user.getId(), user.getUsername(), user.getRole());
         return new LoginVO(token, jwtUtil.getExpireSeconds(), user.getId(),
                 user.getUsername(), user.getNickname(), user.getAvatarUrl());
     }
