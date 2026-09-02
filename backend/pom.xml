@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
@@ -15,7 +14,7 @@
     <artifactId>tastelink-backend</artifactId>
     <version>1.0.0</version>
     <name>tastelink-backend</name>
-    <description>TasteLink 后端 - 城市餐饮推荐与社交互动平台(MVP)</description>
+    <description>TasteLink 后端 - 城市餐饮推荐与社交互动平台</description>
 
     <properties>
         <java.version>17</java.version>
@@ -27,6 +26,7 @@
         <jjwt.version>0.12.5</jjwt.version>
         <aliyun-oss.version>3.17.4</aliyun-oss.version>
         <lombok.version>1.18.46</lombok.version>
+        <testcontainers.version>1.19.3</testcontainers.version>
     </properties>
 
     <dependencies>
@@ -58,6 +58,12 @@
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
+        </dependency>
+
+        <!-- Redis (Spring Boot 3 + Lettuce) —— v2 Phase A 点评审热度排行缓存 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
         <!-- JWT (jjwt 0.12.x) -->
@@ -102,6 +108,19 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Testcontainers：真 Redis 集成测试（需本机 Docker 且 -DRUN_IT=true 才执行；否则跳过） -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

@@ -1,6 +1,6 @@
 # =====================================================================
 # TasteLink 后端配置（提交版：仅含占位符与环境变量引用，无真实凭据）
-# 真实 DB 口令 / OSS AK/SK / JWT 密钥 请写入 application-local.yml（已 gitignore）
+# 真实 DB 口令 / OSS AK/SK / JWT 密钥 / Redis 密码 请写入 application-local.yml（已 gitignore）
 # 或通过环境变量注入，切勿直接回填本文件。
 # =====================================================================
 server:
@@ -27,6 +27,14 @@ spring:
       maximum-pool-size: 10
       minimum-idle: 2
       connection-timeout: 20000
+  # Redis（v2 Phase A 点评审热度排行缓存；Lettuce 懒连接，未起 Redis 不影响启动）
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DB:0}
+      timeout: 2000ms
   servlet:
     multipart:
       max-file-size: 10MB
@@ -75,3 +83,13 @@ tastelink:
       access-key-secret: ${OSS_SK:}
       bucket: ${OSS_BUCKET:}
       domain: ${OSS_DOMAIN:}   # 自定义访问域名；为空则用 https://{bucket}.{endpoint}
+  # v2 Phase A：点评审热度排行缓存（Redis ZSet）
+  rank:
+    # 缓存总开关；关闭后读写均回退 MySQL，便于灰度/回滚
+    cache-enabled: ${RANK_CACHE_ENABLED:true}
+    # 全局热度 ZSet 的 key（v2 Phase A 仅缓存全局；按城市筛选仍走 MySQL）
+    zset-key: ${RANK_ZSET_KEY:review:hot}
+    # 定时对账：以 MySQL 为准重建全局 ZSet（修复漂移 + 冷启动空缓存）
+    rebuild-cron: ${RANK_REBUILD_CRON:0 */10 * * * *}
+    # 重建时保留的 TopN 条数（避免 ZSet 无限增长）
+    rebuild-top-size: ${RANK_REBUILD_TOP_SIZE:200}

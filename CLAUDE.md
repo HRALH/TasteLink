@@ -20,8 +20,9 @@ TasteLink is a 城市餐饮口碑社区 (city food review community) — a monor
 cd backend
 mvn spring-boot:run            # run dev server on :8080
 mvn clean package              # build jar (target/)
-mvn test                       # run all tests (NOTE: no tests exist yet — `src/test` is empty; spring-boot-starter-test is wired, so this runs 0 tests today)
-mvn test -Dtest=MyTest#method  # single-test pattern (class#method) — usable once tests are added under `backend/src/test`
+mvn test                       # run unit tests (Mockito-based; no Spring context, so no DB/Redis needed)
+mvn test -Dtest=ClassName#method  # single-test pattern (class#method)
+mvn test -DRUN_IT=true -Dtest=HotRankServiceIT  # Testcontainers IT — needs local Docker to start a real Redis container
 ```
 Requires MySQL 8 reachable per `application.yml` defaults (`localhost:3306/tastelink`). DB is **not** auto-initialized — `spring.sql.init.mode=never`; run `db/schema.sql` then `db/data.sql` manually before first start.
 
@@ -40,6 +41,7 @@ There is no test runner configured. Start the backend first for full-stack dev; 
 
 - `application.yml` is committed with **placeholders only** (env-var refs). Real DB password, OSS AK/SK, and JWT secret go in `application-local.yml`, which is gitignored. Copy from `application-local.yml.example`.
 - Default active profile is `local`. Override per-environment via `SPRING_PROFILES_ACTIVE` / env vars (`DB_HOST`, `JWT_SECRET`, `STORAGE_TYPE=oss|local`, `CORS_ORIGINS`, etc.).
+- **Redis** (v2 Phase A — 点评审热度排行缓存): config under `spring.data.redis.*` / `tastelink.rank.*`. Env: `REDIS_HOST`/`REDIS_PORT`/`REDIS_PASSWORD`/`REDIS_DB`; set `RANK_CACHE_ENABLED=false` to fall back to pure MySQL ranking. Local: `docker compose up -d redis`. Lettuce connects lazily — the app starts fine without Redis; only the home hot-review path degrades to MySQL on cache miss/error. The Testcontainers IT (`HotRankServiceIT`) is gated behind `-DRUN_IT=true` and skipped in a normal `mvn test` (no Docker required).
 - File storage is swappable via `storage.type`: `local` (default) writes to `./data/uploads/yyyy/MM/uuid.ext` and serves via `/static/uploads/**`; `oss` uses Aliyun OSS. Both impl `FileStorageService`; business code depends only on the interface and never constructs URLs.
 - **Never commit real credentials.** `application-local.yml`, `.env*`, `*.key/*.pem`, and `**/data/uploads/` are gitignored — keep them out of commits.
 
@@ -54,6 +56,7 @@ Conventions that span multiple files and aren't obvious from a single one:
 - **Stateless JWT security** (`SecurityConfig`): `SessionCreationPolicy.STATELESS`, CSRF off, `JwtAuthFilter` before `UsernamePasswordAuthenticationFilter`. Filter silently skips on bad tokens (the `authenticationEntryPoint` renders 401 as `R`). **Whitelist order is sensitive**: `GET /users/me` (authenticated) MUST be declared before `GET /users/**` (permitAll). Public = auth endpoints + GET browse endpoints (shops/reviews/home/public user profiles). Everything else requires login. Get the caller via `SecurityContextHelper.getCurrentUserId()`.
 - **Passwords**: `BCryptPasswordEncoder(strength=10)`. Reponse `VO`s must never include `password`.
 - **Idempotent counters** (like/follow): rely on unique constraints (`uk_review_user`, `uk_follower_followee`); catch `DuplicateKeyException` and treat as success returning current count — never "read-then-write". Cancel/unfollow: decrement only when `affected rows > 0`, always via `GREATEST(0, n-1)`. All redundant counter updates (review.like_count, shop aggregates) happen inside the **same `@Transactional` method** as the row write. See `InteractionServiceImpl` for the reference pattern.
+- **Hot review ranking** (v2 Phase A): `ReviewServiceImpl.hotReviews` reads from a Redis ZSet (`HotRankService.topReviewIds`) when no city filter and cache enabled — batch-loads reviews by id, **reorders to the cache rank**, and falls back to MySQL (`hotReviewsFromDb`) otherwise. Likes/unlikes push the ZSet in an `afterCommit` hook (inside the insert try-block, so it fires only on a real new like — reuses the idempotency pattern above; DB rollback never advances the cache). `ScheduledRankRebuild` reconciles drift from MySQL. Composite score = `like_count*100 + min(reply_count,99)`; Phase A caches **global** hot only — city-filtered home still hits MySQL.
 - **Logical foreign keys** (no physical FK), referential integrity validated in Service. **Soft delete** is a `status` column (1 normal / 0 hidden), filtered per-query — the global MyBatis-Plus logic-delete plugin is intentionally **not** enabled.
 
 ## Frontend architecture
