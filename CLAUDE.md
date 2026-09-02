@@ -32,9 +32,11 @@ npm install
 npm run dev        # dev server http://localhost:5173 (proxies /api → http://localhost:8080)
 npm run build      # tsc -b && vite build (typecheck is part of build)
 npm run lint       # oxlint
+npm run test       # vitest watch (jsdom + RTL + msw)
+npm run test:run   # vitest one-shot
 npm run preview    # serve build output
 ```
-There is no test runner configured. Start the backend first for full-stack dev; the SPA renders its skeleton even when the API is down.
+Tests live under `src/test/` (vitest config in `vitest.config.ts`); `src/test/**` is excluded from `tsc -b` so build ignores test files. Start the backend first for full-stack dev; the SPA renders its skeleton even when the API is down.
 
 ## Configuration & secrets
 
@@ -61,12 +63,12 @@ Conventions that span multiple files and aren't obvious from a single one:
 `src/api/*` is a 1:1 client per backend module; all routes go through `src/api/request.ts` — the single axios instance whose:
 - baseURL is `VITE_API_BASE_URL` (default `/api/v1`, proxied to `:8080` in dev so there's no CORS during local dev),
 - request interceptor injects `Authorization: Bearer ${token}` from the Zustand auth store,
-- response interceptor **unwraps `R.data`**, treats idempotent codes `40902`/`40903` as success (returns `data`), and on HTTP 401 clears auth + redirects to `/login?redirect=...`.
+- response interceptor **unwraps `R.data`**, treats idempotent codes `40902`/`40903` as success (returns `data`), and on HTTP 401 clears auth + redirects to `/login?redirect=...`. Non-success `code≠0` rejects an `ApiError` (carrying `code`/`data`); **processable codes** (`PROCESSABLE_CODES`, e.g. `SHOP_VERSION_CONFLICT=409`) suppress the auto-`message.error` and just throw `ApiError(code)` so callers branch (admin edit page → "加载最新内容" modal). `409` travels as **HTTP 409**, handled in the error branch.
 
 So API client functions return `Promise<T>` of the already-unwrapped `data` — never the `R` envelope. Error codes live in `src/utils/constants.ts` (`Code`) and must stay aligned with `docs/05 §3.2` and backend `ResultCode`.
 
-- **Auth state**: `src/store/authStore.ts` (Zustand + `persist`) holds `token`/`userInfo`, persisted to `localStorage` key `tastelink-auth`. `isLoggedIn` gates routes.
-- **Routing** (`src/router/index.tsx`): `RequireAuth` wraps protected routes (`/me`, `/shops/:id/review`); auth pages render without `MainLayout`.
+- **Auth state**: `src/store/authStore.ts` (Zustand + `persist`) holds `token`/`userInfo`/`role`/`isLoggedIn`, persisted to `localStorage` key `tastelink-auth`. `.isLoggedIn` gates routes; `isAdmin` (derived from `role === 'ADMIN'`) gates admin UI. **`role` is decoded from the JWT** (`src/utils/jwt.ts` — backend `LoginVO`/`UserVO` don't return role): purely advisory client-side; real `/admin/**` authorization is enforced by the backend `hasRole('ADMIN')` (403), so the decoded role only drives UI affordances, never access.
+- **Routing** (`src/router/index.tsx`): `RequireAuth` wraps protected routes (`/me`, `/shops/:id/review`); `RequireAdmin` wraps admin routes (`/admin/shops`, `/admin/shops/:id/edit`) — not-logged-in → `/login`, logged-in non-admin → `/` (the backend still 403s real admin calls); auth pages render without `MainLayout`. Tests live in `src/test/` (vitest + RTL + msw), excluded from `tsc -b` via `tsconfig.app.json`.
 - **Contracts** (`src/types/api.ts`): shared `R` / `PageResult` / VO shapes matching backend DTOs.
 - **Image upload convention** (`docs/03 §7`): first `POST /files/image` to get a URL, then include that URL in the review submit — never inline binary in JSON.
 

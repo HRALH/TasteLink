@@ -8,6 +8,24 @@ import { useAuthStore } from '../store/authStore'
 import { Code } from '../utils/constants'
 
 /**
+ * 可被调用方分支处理的业务错误码：拦截器抑制自动 `message.error`，抛 `ApiError` 交调用方处理。
+ * v2：`SHOP_VERSION_CONFLICT(409)` 乐观锁冲突，由管理员编辑页弹 Modal 提示「加载最新内容」。
+ */
+export const PROCESSABLE_CODES = new Set<number>([Code.SHOP_VERSION_CONFLICT])
+
+/** 统一业务错误：携带 `code`（及可选 `data`），调用方可 `catch` 后按码分支（如 409 刷新）。 */
+export class ApiError extends Error {
+  code: number
+  data?: unknown
+  constructor(code: number, message: string, data?: unknown) {
+    super(message)
+    this.name = 'ApiError'
+    this.code = code
+    this.data = data
+  }
+}
+
+/**
  * axios 实例与拦截器封装（docs/03 §5.1）
  * - baseURL：env VITE_API_BASE_URL，默认 /api/v1（dev 经 Vite 代理转后端）
  * - 请求拦截器：自动注入 Authorization: Bearer ${token}
@@ -58,8 +76,12 @@ instance.interceptors.response.use(
       if (r.code === Code.ALREADY_LIKED || r.code === Code.ALREADY_FOLLOWED) {
         return r.data
       }
+      // 可处理码：抑制自动 toast，抛 ApiError 交调用方分支处理（v2 409 乐观锁冲突）
+      if (PROCESSABLE_CODES.has(r.code)) {
+        return Promise.reject(new ApiError(r.code, r.message || '', r.data))
+      }
       message.error(r.message || '请求失败')
-      return Promise.reject(new Error(r.message || `code=${r.code}`))
+      return Promise.reject(new ApiError(r.code, r.message || `code=${r.code}`, r.data))
     }
     return r.data
   },
@@ -70,6 +92,9 @@ instance.interceptors.response.use(
       useAuthStore.getState().logout()
       message.error(r?.message || '登录已失效，请重新登录')
       redirectToLogin()
+    } else if (status === 409 && PROCESSABLE_CODES.has(r?.code ?? 0)) {
+      // 乐观锁冲突走 HTTP 409：抑制 toast，抛 ApiError 交调用方弹 Modal（后端 code 409）
+      return Promise.reject(new ApiError(r?.code ?? 409, r?.message || '', r))
     } else if (status && status >= 500) {
       message.error(r?.message || '服务器异常，请稍后再试')
     } else if (r?.message) {

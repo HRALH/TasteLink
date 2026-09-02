@@ -30,6 +30,8 @@ export interface UserInfo {
   username: string
   nickname: string
   avatarUrl: string
+  /** 角色（v2 由 JWT claim 解出，后端 LoginVO 未带）；'ADMIN' 管理员 / 'USER' 普通 */
+  role?: 'USER' | 'ADMIN'
 }
 
 // ===== VO =====
@@ -161,4 +163,15 @@ export interface CreateReviewBody {
 
 export interface CreateCommentBody {
   content: string
+}
+
+/** 管理员编辑店铺请求（v2 Phase B）：字段均可选，非空才更新（对齐后端 UpdateShopRequest @Size） */
+export interface UpdateShopRequest {
+  name?: string
+  categoryId?: number
+  city?: string
+  address?: string
+  phone?: string
+  coverUrl?: string
+  description?: string
 }
