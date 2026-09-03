@@ -1,6 +1,6 @@
 # TasteLink
 
-> 城市餐饮口碑社区 —— 发布点评、点赞评论、关注作者,用 UGC 沉淀一座城市的味道。
+> 城市餐饮口碑社区 —— 发布点评、点赞评论,用 UGC 沉淀一座城市的味道。
 
 ![Java](https://img.shields.io/badge/Java-17-orange)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.5-6db33f)
@@ -19,8 +19,12 @@ TasteLink 是一个 Monorepo(Spring Boot 后端 + Vite/React 前端 + 中文设�
 - **关注**:关注/取关、关注列表与粉丝列表,不可关注自己
 - **首页**:热门店铺 + 热门点评,按城市筛选
 - **图片上传**:阿里云 OSS 为主、本地存储兜底,业务代码只依赖 `FileStorageService` 接口
+- **管理员后台**(v2 Phase B):`ADMIN` 角色(ride 在 JWT claim)经 `/api/v1/admin/**` 编辑/删除店铺,并发改同店走 MyBatis-Plus `@Version` 乐观锁,后提交者获 409「请刷新重试」
+- **热度排行缓存**(v2 Phase A):首页热门点评读 Redis ZSet(`ZREVRANGE`),点赞在事务提交后(afterCommit)写 ZSet,`ScheduledRankRebuild` 定时对账修复漂移,`RANK_CACHE_ENABLED=false` 降级回 MySQL
+- **店铺删除延时清理**(v2 Phase C / C-Full):删店先标记下架(同事务级联 `status=0` + 回扣计数),`afterCommit` 发 RabbitMQ 延时消息(TTL+DLX,免插件),消费端级联物理删评论/点赞/图片,`ScheduledShopCleanupReconcile` 对账兜底
+- **关键词检索**(v2 Phase D):店铺 `keyword` 命中走 Elasticsearch(`ShopDoc` + Criteria),异常/禁用降级回 MySQL `LIKE`,`ScheduledShopReconcile` 定时全量重建索引
 
-> MVP 范围与边界见 [`docs/01-需求文档.md`](docs/01-需求文档.md)。不引入 Redis/MQ/ES,单库 MySQL 即可承载,登录态默认 24h。
+> MVP 范围与边界见 [`docs/01-需求文档.md`](docs/01-需求文档.md)。v2 中间件升级(见 [`docs/06`](docs/06-中间件升级开发计划.md))已引入 Redis / RabbitMQ / Elasticsearch,三阶段均带特性开关可降级回 MySQL;中间件缺位时应用仍可启动(各自懒加载)。**Canal binlog 增量同步、IK 中文分词**为 infra 待办,当前以定时全量重建兜底同步。
 
 ## 技术栈
 
@@ -29,13 +33,15 @@ TasteLink 是一个 Monorepo(Spring Boot 后端 + Vite/React 前端 + 中文设�
 | 后端 | Spring Boot 3.2.5 · Java 17 · MyBatis-Plus 3.5.7 · Spring Security · jjwt 0.12.5 · MySQL 8 · 阿里云 OSS SDK |
 | 前端 | React 19 · Vite 8 · TypeScript 6 · Ant Design 5 · Zustand 5 · react-router-dom 6 · axios |
 | 校验/Lint | spring-boot-starter-validation · oxlint |
-| 文档 | `docs/` 下 5 份中文设计文档(需求 / 后端 / 前端 / 数据库 / API) |
+| 中间件(v2) | Redis 7(Lettuce) · RabbitMQ 3.13(AMQP) · Elasticsearch 8.11(Spring Data ES),均带特性开关可降级回 MySQL |
+| 测试(v2) | spring-boot-starter-test(Mockito 单测) · Testcontainers(MySQL/Redis/RabbitMQ/ES 集成测试,`-DRUN_IT=true`) |
+| 文档 | `docs/` 下 7 份中文设计文档(需求 / 后端 / 前端 / 数据库 / API / 中间件升级计划 / 前端开发计划) |
 
 ## 快速开始
 
 ### 环境要求
 
-JDK 17+、Maven(系统 `mvn`,无 wrapper)、Node 20+、MySQL 8。
+JDK 17+、Maven(系统 `mvn`,无 wrapper)、Node 20+、MySQL 8。v2 中间件可选:`docker compose up -d redis rabbitmq elasticsearch`(缺位时对应特性自动降级回 MySQL)。
 
 ### 1. 克隆
 
@@ -63,7 +69,7 @@ cp backend/src/main/resources/application-local.yml.example \
    backend/src/main/resources/application-local.yml
 ```
 
-填入 DB 密码、JWT secret(≥32 字符);若用 OSS 再填 AK/SK。`application-local.yml` 已 gitignore,不会提交。
+填入 DB 密码、JWT secret(≥32 字符);若用 OSS 再填 AK/SK;若启 v2 中间件再填 `REDIS_*`/`RABBITMQ_*`/`ES_URIS`。`application-local.yml` 已 gitignore,不会提交。
 
 ### 4. 启动后端(:8080)
 
@@ -97,6 +103,12 @@ Vite 把 `/api` 代理到 `http://localhost:8080`,本地开发无 CORS。访问 
 | `STORAGE_TYPE` | 文件存储 | `local`(兜底) / `oss` |
 | `OSS_ENDPOINT` / `OSS_AK` / `OSS_SK` / `OSS_BUCKET` / `OSS_DOMAIN` | OSS 凭据 | 空 |
 | `CORS_ORIGINS` | CORS 白名单 | `http://localhost:5173,http://localhost:3000` |
+| `REDIS_HOST`/`REDIS_PORT`/`REDIS_PASSWORD`/`REDIS_DB` | Redis(v2 Phase A) | `localhost:6379`/空/`0` |
+| `RABBITMQ_HOST`/`_PORT`/`_USER`/`_PASSWORD`/`_VHOST` | RabbitMQ(v2 Phase C) | `localhost:5672`/`guest`/`/` |
+| `ES_URIS` | Elasticsearch(v2 Phase D) | `http://localhost:9200` |
+| `RANK_CACHE_ENABLED`/`RABBIT_ENABLED`/`SEARCH_ENABLED` | v2 三阶段特性开关 | `true`,置 `false` 降级回 MySQL |
+| `RANK_REBUILD_CRON`/`SEARCH_REBUILD_CRON`/`RABBIT_CLEANUP_RECON_CRON` | ZSet / ES 索引 / 删店对账 定时重建 cron | `0 */10 * * * *` 等 |
+| `RABBIT_CLEANUP_DELAY_MS` | 删店延时清理窗口(delay-queue `x-message-ttl`) | `5000ms` |
 
 > 本地存储(`STORAGE_TYPE=local`)写入 `./data/uploads/yyyy/MM/uuid.ext`,经 `/static/uploads/**` 静态资源对外提供;OSS 模式用自定义 `domain` 或默认 `https://{bucket}.{endpoint}`。
 
@@ -106,10 +118,10 @@ Vite 把 `/api` 代理到 `http://localhost:8080`,本地开发无 CORS。访问 
 TasteLink/
 ├── backend/                # Spring Boot 后端
 │   └── src/main/java/com/tastelink/
-│       ├── config/         # Security / MybatisPlus / Oss / Storage / MetaObjectHandler
-│       ├── controller/     # /api/v1 下 8 个模块
-│       ├── service+impl/   # 业务逻辑(含幂等计数参考模式)
-│       ├── entity/mapper/  # 8 张表实体 + MyBatis-Plus mapper
+│       ├── config/         # Security / MybatisPlus / Oss / Storage / MetaObjectHandler / RabbitMQConfig / ShopIndexInitializer / Scheduled*
+│       ├── controller/     # /api/v1 下 9 个模块(含 admin)
+│       ├── service+impl/   # 业务逻辑(含幂等计数模式、HotRank/Search/ShopCleanup)
+│       ├── entity/mapper/  # 8 张表实体 + MyBatis-Plus mapper(+ShopDoc ES 文档)
 │       ├── security/       # JwtAuthFilter / JwtUtil / SecurityContextHelper
 │       └── common/         # R<T> 统一返回体 / ResultCode / PageResult
 ├── frontend/               # Vite + React SPA
@@ -117,10 +129,10 @@ TasteLink/
 │       ├── api/            # 1:1 后端模块的 axios 客户端(request.ts 解包 R.data)
 │       ├── store/          # Zustand auth 状态(localStorage 持久化)
 │       ├── components/     # editorial/ 编辑式组件 + layout/
-│       ├── pages/          # home / auth / shop / user / review / common
+│       ├── pages/          # home / auth / shop / user / review / common / admin
 │       ├── styles/         # tokens.ts —— 视觉 token 单一来源
-│       └── router/         # RequireAuth 路由守卫
-└── docs/                   # 01 需求 · 02 后端 · 03 前端 · 04 数据库 · 05 API
+│       └── router/         # RequireAuth / RequireAdmin 路由守卫
+└── docs/                   # 01 需求 · 02 后端 · 03 前端 · 04 数据库 · 05 API · 06 中间件升级 · 07 前端计划
 ```
 
 ## API 速览
@@ -137,15 +149,16 @@ TasteLink/
 | 关注 | `POST/DELETE /users/{id}/follow` · `GET /users/{id}/followings\|followers` | 写需登录 |
 | 首页 | `GET /home?city=` | 公开 |
 | 上传 | `POST /files/image`(`multipart/form-data`) | 需登录 |
+| 管理后台(v2) | `PUT /admin/shops/{id}`(编辑,409 并发冲突) · `DELETE /admin/shops/{id}`(延时清理) | `ADMIN` |
 
-> 幂等码:`40902`(已点赞)、`40903`(已关注)由后端按 HTTP 200 返回,前端 `request.ts` 拦截器当成功处理。`40901` 用户名已存在、`40904` 不可关注自己。
+> 幂等码:`40902`(已点赞)、`40903`(已关注)由后端按 HTTP 200 返回,前端 `request.ts` 拦截器当成功处理。`40901` 用户名已存在、`40904` 不可关注自己;v2 新增 `409`(HTTP) `SHOP_VERSION_CONFLICT` —— 管理员并发改同店,`request.ts` 当可处理码抛 `ApiError(code)`,前端弹「加载最新内容」。
 
 ## 数据模型(8 张表)
 
 | 表 | 用途 |
 |---|---|
-| `t_user` | 用户,冗余关注 / 粉丝 / 点评计数 |
-| `t_shop` / `t_shop_category` | 店铺与分类字典,冗余评分 / 点评 / 点赞计数 |
+| `t_user` | 用户,冗余关注 / 粉丝 / 点评计数;`role`(v2:`USER` 默认 / `ADMIN`) |
+| `t_shop` / `t_shop_category` | 店铺与分类字典,冗余评分 / 点评 / 点赞计数;`t_shop.version`(v2 乐观锁) |
 | `t_review` | 点评,冗余城市 + 点赞 / 评论计数 |
 | `t_review_image` | 点评图片(有序,最多 9) |
 | `t_review_like` | 点赞关系(`uk_review_user` 唯一约束) |
@@ -171,7 +184,11 @@ DDL + 种子数据见 [`docs/04-数据库表设计.md`](docs/04-数据库表设�
 cd backend
 mvn spring-boot:run          # 开发服务 :8080
 mvn clean package            # 打包到 target/
-mvn test                     # 注:当前无测试,src/test 为空(测试依赖已就绪)
+mvn test                     # 单元测试(Mockito,不需 DB/Redis);Testcontainers 集成测试需本地 Docker
+mvn test -DRUN_IT=true -Dtest=HotRankServiceIT    # 真 Redis — 点评审热度排行
+mvn test -DRUN_IT=true -Dtest=AdminShopServiceIT # 真 MySQL — @Version 乐观锁 + 角色鉴权
+mvn test -DRUN_IT=true -Dtest=ShopCleanupIT       # 真 RabbitMQ+MySQL — 店铺删除延时清理
+mvn test -DRUN_IT=true -Dtest=SearchServiceIT     # 真 ES+MySQL — 关键词检索
 
 # 前端
 cd frontend
@@ -181,17 +198,19 @@ npm run lint                 # oxlint
 npm run preview              # 预览构建产物
 ```
 
-> 跨文件的开发约定、架构内幕与容易踩坑的敏感点(白名单顺序、幂等计数模式、统一返回体等)详见 [`CLAUDE.md`](CLAUDE.md)。
+> 跨文件的开发约定、架构内幕与容易踩坑的敏感点(白名单顺序、幂等计数模式、统一返回体、v2 各 Phase 落地细节)详见 [`CLAUDE.md`](CLAUDE.md)。
 
 ## 文档
 
 | 文档 | 内容 |
 |---|---|
-| [`docs/01-需求文档.md`](docs/01-需求文档.md) | 需求与里程碑、功能优先级、MVP 边界 |
+| [`docs/01-需求文档.md`](docs/01-需求文档.md) | 需求与里程碑、功能优先级、MVP 边界(§6.2 已标注 v2 转正项) |
 | [`docs/02-后端模块划分.md`](docs/02-后端模块划分.md) | 后端模块划分与关键技术设计 |
 | [`docs/03-前端模块划分.md`](docs/03-前端模块划分.md) | 前端模块划分、视觉系统 |
-| [`docs/04-数据库表设计.md`](docs/04-数据库表设计.md) | 8 表 DDL + 种子数据 |
-| [`docs/05-接口API设计.md`](docs/05-接口API设计.md) | REST 契约、错误码、VO |
+| [`docs/04-数据库表设计.md`](docs/04-数据库表设计.md) | 8 表 DDL + 种子数据(role/version 列) |
+| [`docs/05-接口API设计.md`](docs/05-接口API设计.md) | REST 契约、错误码、VO(含 admin 端点 + 409) |
+| [`docs/06-中间件升级开发计划.md`](docs/06-中间件升级开发计划.md) | v2 Redis/MQ/ES 升级计划与实施状态(§0.6) |
+| [`docs/07-前端开发计划.md`](docs/07-前端开发计划.md) | v2 前端重构计划(管理后台 / 视觉系统 / 测试) |
 
 ## 开源协议
 
