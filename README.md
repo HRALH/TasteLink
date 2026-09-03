@@ -132,7 +132,8 @@ TasteLink/
 │       ├── pages/          # home / auth / shop / user / review / common / admin
 │       ├── styles/         # tokens.ts —— 视觉 token 单一来源
 │       └── router/         # RequireAuth / RequireAdmin 路由守卫
-└── docs/                   # 01 需求 · 02 后端 · 03 前端 · 04 数据库 · 05 API · 06 中间件升级 · 07 前端计划
+├── docker/                  # 全栈部署:Dockerfile.backend / Dockerfile.frontend / nginx.conf / docker-compose.yml
+└── docs/                   # 01 需求 · 02 后端 · 03 前端 · 04 数据库 · 05 API · 06 中间件升级 · 07 前端计划 · 08 运维部署
 ```
 
 ## API 速览
@@ -200,6 +201,21 @@ npm run preview              # 预览构建产物
 
 > 跨文件的开发约定、架构内幕与容易踩坑的敏感点(白名单顺序、幂等计数模式、统一返回体、v2 各 Phase 落地细节)详见 [`CLAUDE.md`](CLAUDE.md)。
 
+## Docker 部署
+
+一键全栈(MySQL + Redis + RabbitMQ + Elasticsearch + 前后端),核心命令(须在仓库根、带 `--project-directory .`):
+
+```bash
+# 1) 按 docs/08 §4.2 创建 docker/.env(至少填 JWT_SECRET / DB_PASSWORD;模板见该文档)
+# 2) 构建并拉起(首次加 --build):
+docker compose --project-directory . -f docker/docker-compose.yml up -d --build
+# 前端 http://localhost:8081 · 后端 :8080 · RabbitMQ 管理界面 :15672 · ES :9200
+docker compose --project-directory . -f docker/docker-compose.yml logs -f backend
+docker compose --project-directory . -f docker/docker-compose.yml down        # 停
+```
+
+`docker/`: `Dockerfile.backend`(多阶段 Maven→JRE)、`Dockerfile.frontend`(Node→nginx 反代)、`nginx.conf`、`docker-compose.yml`。完整步骤、`.env` 模板、镜像构建说明、中间件配置/降级、测试与生产清单见 [`docs/08-运维部署指南.md`](docs/08-运维部署指南.md)。注意 `.env` 已被 gitignore(`.env*`),不入库。
+
 ## 文档
 
 | 文档 | 内容 |
@@ -211,6 +227,7 @@ npm run preview              # 预览构建产物
 | [`docs/05-接口API设计.md`](docs/05-接口API设计.md) | REST 契约、错误码、VO(含 admin 端点 + 409) |
 | [`docs/06-中间件升级开发计划.md`](docs/06-中间件升级开发计划.md) | v2 Redis/MQ/ES 升级计划与实施状态(§0.6) |
 | [`docs/07-前端开发计划.md`](docs/07-前端开发计划.md) | v2 前端重构计划(管理后台 / 视觉系统 / 测试) |
+| [`docs/08-运维部署指南.md`](docs/08-运维部署指南.md) | 本地起栈 / Docker 全栈 / `.env` / 中间件降级 / 测试 / 生产清单 |
 
 ## 开源协议
 

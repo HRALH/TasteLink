@@ -1,0 +1,33 @@
+# syntax=docker/dockerfile:1
+# =====================================================================
+# TasteLink 后端镜像（多阶段：Maven 构建 + JRE 运行）
+# 构建上下文 = 仓库根（见 docker/docker-compose.yml 的 `--project-directory .`）
+#   docker compose --project-directory . -f docker/docker-compose.yml build backend
+# =====================================================================
+ARG MAVEN_IMAGE=maven:3.9-eclipse-temurin-17
+ARG JRE_IMAGE=eclipse-temurin:17-jre
+
+# ---- 1) 构建：打 Spring Boot fat jar ----
+FROM ${MAVEN_IMAGE} AS build
+WORKDIR /build
+# 先只拷 pom，缓存依赖层；改源码不重复下依赖
+COPY backend/pom.xml ./
+RUN mvn -B dependency:go-offline
+# 拷源码 + 资源（含 db/*.sql、mapper xml）
+COPY backend/src ./src
+# 打包、跳过测试（测试用 Testcontainers 见 docs/08 §8）;rename 为固定名避免版本号耦合
+RUN mvn -B clean package -DskipTests \
+ && mv target/tastelink-backend-*.jar /build/app.jar
+
+# ---- 2) 运行：JRE，非 root ----
+FROM ${JRE_IMAGE} AS runtime
+WORKDIR /app
+RUN groupadd -r tastelink && useradd -r -g tastelink -u 1000 tastelink \
+ && chown -R tastelink:tastelink /app
+COPY --from=build /build/app.jar /app/app.jar
+USER tastelink
+EXPOSE 8080
+# JAVA_OPTS 可在 compose/运行时覆盖（如 -Xmx）
+ENV TZ=Asia/Shanghai \
+    JAVA_OPTS="-Xms256m -Xmx512m"
+ENTRYPOINT ["sh","-c","exec java $JAVA_OPTS -jar /app/app.jar"]

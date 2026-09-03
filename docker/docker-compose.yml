@@ -1,0 +1,115 @@
+# =====================================================================
+# TasteLink 全栈 Docker 部署：MySQL + Redis + RabbitMQ + Elasticsearch + 后端 + 前端
+# 与根目录 docker-compose.yml（仅本地中间件）互补：本文件用于"一键拉起完整栈"。
+#
+# 运行（必须在仓库根目录，带 --project-directory . 使相对路径以仓库根为准）:
+#   1) 创建 docker/.env（模板见 docs/08 §4.2），至少填 JWT_SECRET / DB_PASSWORD
+#   2) 首次:  docker compose --project-directory . -f docker/docker-compose.yml up -d --build
+#   3) 查看日志: ... logs -f backend
+#   4) 停:        ... down
+#      清卷重置数据(慎): ... down -v
+#
+# 仅 MySQL 是硬启动依赖（连接池急初始化）；Redis/RabbitMQ/ES 均懒加载/可降级，
+# 故 backend 只 health-gate mysql，其余仅 start 顺序约束（符合应用降级哲学）。
+# =====================================================================
+services:
+  mysql:
+    image: mysql:8
+    container_name: tastelink-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-tastelink}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-rootpass}
+      TZ: Asia/Shanghai
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports: ["3306:3306"]
+    healthcheck:
+      # $$ 转义，避免 compose 展开；由 shell 解析容器内 env
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 8s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # 仅在数据卷为空时首次初始化（与 spring.sql.init.mode=never 契合）；改 schema 需 down -v
+      - ./backend/src/main/resources/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./backend/src/main/resources/db/data.sql:/docker-entrypoint-initdb.d/02-data.sql:ro
+
+  redis:
+    image: redis:7-alpine
+    container_name: tastelink-redis
+    restart: unless-stopped
+    ports: ["6379:6379"]
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: tastelink-rabbitmq
+    restart: unless-stopped
+    ports: ["5672:5672", "15672:15672"]   # 15672 = 管理界面
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: tastelink-elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports: ["9200:9200"]
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    image: tastelink-backend:1.0.0
+    container_name: tastelink-backend
+    restart: unless-stopped
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_started }
+      rabbitmq: { condition: service_started }
+      elasticsearch: { condition: service_started }
+    ports: ["8080:8080"]
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:-tastelink}
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD:-rootpass}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET 必填，见 docs/08 §4.2}
+      STORAGE_TYPE: ${STORAGE_TYPE:-local}
+      STORAGE_LOCAL_PATH: /app/data/uploads
+      # 浏览器可达的后端地址（local 存储的图片 URL 会拼成绝对地址存库）
+      STORAGE_PUBLIC_BASE_URL: ${STORAGE_PUBLIC_BASE_URL:-http://localhost:8080}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:8081}
+      REDIS_HOST: redis
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      ES_URIS: http://elasticsearch:9200
+      RANK_CACHE_ENABLED: ${RANK_CACHE_ENABLED:-true}
+      RABBIT_ENABLED: ${RABBIT_ENABLED:-true}
+      SEARCH_ENABLED: ${SEARCH_ENABLED:-true}
+    volumes:
+      - backend_uploads:/app/data/uploads
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+      args:
+        VITE_API_BASE_URL: /api/v1
+    image: tastelink-frontend:1.0.0
+    container_name: tastelink-frontend
+    restart: unless-stopped
+    depends_on: [backend]
+    ports: ["8081:80"]
+
+volumes:
+  mysql_data:
+  backend_uploads:
