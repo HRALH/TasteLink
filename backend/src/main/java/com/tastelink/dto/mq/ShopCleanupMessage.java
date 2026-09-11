@@ -11,7 +11,6 @@ import java.io.Serializable;
  * <ul>
  *   <li>{@code shopId} —— 待物理清理的店铺</li>
  *   <li>{@code sentAt} —— 发送时间戳，排查用（{@link System#currentTimeMillis()}）</li>
- *   <li>{@code retry} —— 重发计数：对账调度补投递时递增，便于 DLQ 排查</li>
  * </ul>
  * 消费者按 {@code shopId} 执行幂等级联清理；重复投递安全。
  */
@@ -24,5 +23,4 @@ public class ShopCleanupMessage implements Serializable {
 
     private Long shopId;
     private long sentAt;
-    private int retry;
 }

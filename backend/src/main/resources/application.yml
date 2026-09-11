@@ -77,7 +77,6 @@ mybatis-plus:
     map-underscore-to-camel-case: true
     default-fetch-size: 100
     default-statement-timeout: 30
-  mapper-locations: classpath*:mapper/*.xml
   global-config:
     banner: false
     db-config:

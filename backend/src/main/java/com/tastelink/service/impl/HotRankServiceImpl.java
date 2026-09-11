@@ -108,10 +108,12 @@ public class HotRankServiceImpl implements HotRankService {
         if (!cacheEnabled || topN <= 0) {
             return;
         }
-        // 以 MySQL 为准取 TopN 复合分；last() 拼接 raw SQL，topN 为 int 无注入风险
+        // 以 MySQL 为准取 TopN 复合分；last() 拼接 raw SQL，权重与 REPLY_CAP 复用类常量消除双份维护，
+        // topN/权重均为 int 无注入风险
         LambdaQueryWrapper<Review> wrapper = new LambdaQueryWrapper<Review>()
                 .eq(Review::getStatus, Constants.STATUS_NORMAL)
-                .last("ORDER BY (like_count * 100 + LEAST(IFNULL(reply_count,0), " + REPLY_CAP + ")) DESC LIMIT " + topN);
+                .last("ORDER BY (like_count * " + (int) LIKE_WEIGHT
+                        + " + LEAST(IFNULL(reply_count,0), " + REPLY_CAP + ")) DESC LIMIT " + topN);
         List<Review> top = reviewMapper.selectList(wrapper);
         try {
             // 快照式重建：先清空再写入，顺带清掉已软删/陈旧的成员。读路径遇空会回退 MySQL。

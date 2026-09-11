@@ -27,22 +27,18 @@ public class ShopCleanupProducer {
     private boolean enabled;
 
     /** 投递延时清理消息；{@code enabled=false} 或 broker 不可达均不抛，靠对账兜底。 */
-    public void send(Long shopId, int retry) {
+    public void send(Long shopId) {
         if (!enabled || shopId == null) {
             return;
         }
-        ShopCleanupMessage msg = new ShopCleanupMessage(shopId, System.currentTimeMillis(), retry);
+        ShopCleanupMessage msg = new ShopCleanupMessage(shopId, System.currentTimeMillis());
         try {
             rabbitTemplate.convertAndSend(RabbitMQConfig.SUBMIT_EXCHANGE, RabbitMQConfig.ROUTING_KEY, msg);
-            log.info("shop cleanup message sent: shopId={}, retry={}", shopId, retry);
+            log.info("shop cleanup message sent: shopId={}", shopId);
         } catch (Exception e) {
             // afterCommit 抛出会把已提交的删店 200 污染成 500，故吞掉
             log.warn("shop cleanup message publish failed, will be reconciled later: shopId={}, err={}", shopId, e.getMessage());
         }
-    }
-
-    public void send(Long shopId) {
-        send(shopId, 0);
     }
 
     public boolean isEnabled() {
