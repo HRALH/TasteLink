@@ -86,6 +86,22 @@ class ShopCleanupServiceImplTest {
     }
 
     @Test
+    void cleanup_prefersColumnOssKey_overUrlReverse() {
+        // B1-1 起 oss_key 真实入库：删图直接用列值，不再走 URL 反推
+        Shop s = shop(1L);
+        when(shopMapper.selectById(1L)).thenReturn(s);
+        when(reviewMapper.selectList(any())).thenReturn(List.of(review(10L, 1L, 7L)));
+        ReviewImage img = image(10L, "http://h:8080/static/uploads/2026/09/a.jpg");
+        img.setOssKey("2026/09/a.jpg");
+        when(reviewImageMapper.selectList(any())).thenReturn(List.of(img));
+
+        service.cleanup(1L);
+
+        verify(fileStorageService).delete("2026/09/a.jpg");
+        verify(fileStorageService, never()).ossKeyFromUrl(any());
+    }
+
+    @Test
     void cleanup_cascadesImagesReviewsHotRank_deletesShop() {
         Shop s = shop(1L);
         when(shopMapper.selectById(1L)).thenReturn(s);

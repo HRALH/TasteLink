@@ -27,8 +27,8 @@ import java.util.List;
  * <p>
  * 幂等口径：{@code shopMapper.selectById==null} 即视为已清理，直接返回。物理删为
  * {@code DELETE}（天然幂等），OSS 删除与 ZSet zrem 已在各自实现内吞异常/对账兜底，故重复投递安全。
- * 删图用 {@link FileStorageService#ossKeyFromUrl(String)} 从 url 反推存储 key（入库多存空串，
- * 仅 url 列可靠），失败由各实现静默吞掉、记入对账后台再补，不阻断主流程。
+ * 删图优先用 {@code t_review_image.oss_key} 列值（B1-1 起真实入库），历史空串行回退
+ * {@link FileStorageService#ossKeyFromUrl(String)} 反推；失败由各实现静默吞掉、记入对账后台再补，不阻断主流程。
  * <p>
  * 列删除顺序满足外键依赖：image → like → comment → review → shop（全逻辑外键无物理 FK，
  * 但依然按依赖序删便于排查）。
@@ -62,11 +62,14 @@ public class ShopCleanupServiceImpl implements ShopCleanupService {
                 .eq(Review::getShopId, shopId));
         List<Long> reviewIds = reviews.stream().map(Review::getId).toList();
         if (!reviewIds.isEmpty()) {
-            // 先删 OSS/本地图片（best-effort 吞异常），再做 DB 物删；重复投递时文件已删→反推后 delete 为 no-op
+            // 先删 OSS/本地图片（best-effort 吞异常），再做 DB 物删；重复投递时文件已删→delete 为 no-op
             List<ReviewImage> images = reviewImageMapper.selectList(new LambdaQueryWrapper<ReviewImage>()
                     .in(ReviewImage::getReviewId, reviewIds));
             for (ReviewImage img : images) {
-                String key = fileStorageService.ossKeyFromUrl(img.getUrl());
+                // B1-1 起 oss_key 真实入库，直接用列值；历史空串行回退 URL 反推
+                String key = StringUtils.hasText(img.getOssKey())
+                        ? img.getOssKey()
+                        : fileStorageService.ossKeyFromUrl(img.getUrl());
                 if (StringUtils.hasText(key)) {
                     fileStorageService.delete(key);
                 }
