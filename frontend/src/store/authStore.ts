@@ -6,9 +6,10 @@ import { getRoleFromToken, type Role } from '../utils/jwt'
 
 /**
  * 全局登录态（docs/03 §5.2）
- * - token / userInfo / role 持久化到 localStorage，刷新页面恢复
- * - role 由 JWT 解出（后端 LoginVO 未带 role，仅 JWT claim 携带）——仅供 UI 显隐 / 路由守卫，
- *   真正鉴权仍由后端 `/admin/**` 的 hasRole('ADMIN') 强制（非管理员得到 403）
+ * - token / userInfo / isLoggedIn 持久化到 localStorage，刷新页面恢复
+ * - role 由 JWT 解出（后端 LoginVO 未带 role，仅 JWT claim 携带），**不持久化**——
+ *   每次加载由 rehydrateRole() 从 token 重新推导，避免冗余存储漂移。
+ *   role 仅供 UI 显隐 / 路由守卫，真正鉴权仍由后端 `/admin/**` 的 hasRole('ADMIN') 强制（403）
  * - 动作：login(token, userInfo)、logout()、updateProfile(partial)、rehydrateRole()
  */
 interface AuthState {
@@ -47,7 +48,6 @@ export const useAuthStore = create<AuthState>()(
       partialize: (s) => ({
         token: s.token,
         userInfo: s.userInfo,
-        role: s.role,
         isLoggedIn: s.isLoggedIn,
       }),
       onRehydrateStorage: () => (state) => {

@@ -3,7 +3,6 @@ import type { ReactNode } from 'react'
 import MainLayout from '../components/layout/MainLayout'
 import NotFound from '../pages/common/NotFound'
 
-// 页面（M10 为占位 stub，后续里程碑替换为真实实现）
 import LoginPage from '../pages/auth/LoginPage'
 import RegisterPage from '../pages/auth/RegisterPage'
 import HomePage from '../pages/home/HomePage'
