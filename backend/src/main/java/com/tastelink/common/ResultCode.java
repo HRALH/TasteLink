@@ -23,6 +23,9 @@ public enum ResultCode {
     ALREADY_FOLLOWED(40903, 200, "已关注"),
     CANNOT_FOLLOW_SELF(40904, 200, "不可关注自己"),
 
+    // B1-2 登录防爆破（HTTP 200，与 4090x 同风格，前端按普通错误 toast）
+    LOGIN_RATE_LIMITED(42901, 200, "登录尝试过于频繁，请 10 分钟后再试"),
+
     // v2 Phase B：管理员并发改店铺乐观锁冲突（HTTP 409，需前端提示刷新）
     SHOP_VERSION_CONFLICT(409, 409, "店铺已被他人修改，请刷新重试");
 

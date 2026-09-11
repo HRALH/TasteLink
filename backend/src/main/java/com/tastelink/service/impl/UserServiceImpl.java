@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.tastelink.common.Constants;
 import com.tastelink.common.ResultCode;
+import com.tastelink.config.RedisKeyNamespace;
 import com.tastelink.dto.request.LoginRequest;
 import com.tastelink.dto.request.RegisterRequest;
 import com.tastelink.dto.request.UpdateProfileRequest;
@@ -18,11 +19,14 @@ import com.tastelink.security.JwtUtil;
 import com.tastelink.security.SecurityContextHelper;
 import com.tastelink.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -31,16 +35,23 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
     /** 密码：长度≥8 且同时含字母与数字 */
     private static final Pattern PASSWORD_PATTERN = Pattern.compile("^(?=.*[A-Za-z])(?=.*\\d).{8,}$");
 
+    /** 登录防爆破（B1-2）：窗口内失败次数上限与窗口时长（秒） */
+    private static final long LOGIN_FAIL_LIMIT = 5;
+    private static final long LOGIN_FAIL_WINDOW_SECONDS = 600;
+
     private final UserMapper userMapper;
     private final FollowMapper followMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final StringRedisTemplate redis;
+    private final RedisKeyNamespace redisKeys;
 
     @Override
     public Long register(RegisterRequest req) {
@@ -66,15 +77,61 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public LoginVO login(LoginRequest req) {
+        // 登录防爆破（B1-2）：Redis 计数 login:fail:{username}，600s 窗口内失败 ≥5 次拒绝。
+        // 独立于 RANK_CACHE_ENABLED（该开关只管热榜）；Redis 缺席/异常一律放行 + warn，
+        // 绝不因限流器故障锁死登录。
+        checkLoginRateLimit(req.getUsername());
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
                 .eq(User::getUsername, req.getUsername())
                 .eq(User::getStatus, Constants.STATUS_NORMAL));
         if (user == null || !passwordEncoder.matches(req.getPassword(), user.getPassword())) {
+            recordLoginFailure(req.getUsername());
             throw new BusinessException(ResultCode.UNAUTHORIZED, "用户名或密码错误");
         }
+        clearLoginFailures(req.getUsername());
         String token = jwtUtil.generate(user.getId(), user.getUsername(), user.getRole());
         return new LoginVO(token, jwtUtil.getExpireSeconds(), user.getId(),
                 user.getUsername(), user.getNickname(), user.getAvatarUrl());
+    }
+
+    /** 失败计数达阈值则抛 42901；Redis 异常放行（fail-open）。 */
+    private void checkLoginRateLimit(String username) {
+        try {
+            String v = redis.opsForValue().get(loginFailKey(username));
+            if (v != null && Long.parseLong(v) >= LOGIN_FAIL_LIMIT) {
+                throw new BusinessException(ResultCode.LOGIN_RATE_LIMITED);
+            }
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("login rate-limit check failed, allow attempt: username={}, err={}", username, e.getMessage());
+        }
+    }
+
+    /** 记录一次失败：INCR，首击补 EXPIRE 窗口；Redis 异常吞掉。 */
+    private void recordLoginFailure(String username) {
+        try {
+            String key = loginFailKey(username);
+            Long n = redis.opsForValue().increment(key);
+            if (n != null && n == 1L) {
+                redis.expire(key, Duration.ofSeconds(LOGIN_FAIL_WINDOW_SECONDS));
+            }
+        } catch (Exception e) {
+            log.warn("login failure record skipped: username={}, err={}", username, e.getMessage());
+        }
+    }
+
+    /** 登录成功清零失败计数；Redis 异常吞掉。 */
+    private void clearLoginFailures(String username) {
+        try {
+            redis.delete(loginFailKey(username));
+        } catch (Exception e) {
+            log.warn("login failure clear skipped: username={}, err={}", username, e.getMessage());
+        }
+    }
+
+    private String loginFailKey(String username) {
+        return redisKeys.key("login:fail:" + username);
     }
 
     @Override
