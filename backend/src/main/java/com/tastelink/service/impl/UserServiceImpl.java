@@ -15,9 +15,11 @@ import com.tastelink.entity.User;
 import com.tastelink.exception.BusinessException;
 import com.tastelink.mapper.FollowMapper;
 import com.tastelink.mapper.UserMapper;
+import com.tastelink.security.JwtBlacklistService;
 import com.tastelink.security.JwtUtil;
 import com.tastelink.security.SecurityContextHelper;
 import com.tastelink.service.UserService;
+import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
@@ -29,6 +31,7 @@ import org.springframework.util.StringUtils;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -52,6 +55,7 @@ public class UserServiceImpl implements UserService {
     private final JwtUtil jwtUtil;
     private final StringRedisTemplate redis;
     private final RedisKeyNamespace redisKeys;
+    private final JwtBlacklistService jwtBlacklistService;
 
     @Override
     public Long register(RegisterRequest req) {
@@ -132,6 +136,22 @@ public class UserServiceImpl implements UserService {
 
     private String loginFailKey(String username) {
         return redisKeys.key("login:fail:" + username);
+    }
+
+    @Override
+    public void logout(String token) {
+        if (!StringUtils.hasText(token)) {
+            return;
+        }
+        try {
+            Claims claims = jwtUtil.parse(token);
+            Date exp = claims.getExpiration();
+            long remaining = exp == null ? 0 : (exp.getTime() - System.currentTimeMillis()) / 1000;
+            jwtBlacklistService.revoke(claims.getId(), remaining);
+        } catch (Exception e) {
+            // token 已过期/非法：无可吊销，静默成功（前端照常清本地态）
+            log.debug("logout with unparseable token, skip blacklist: {}", e.getMessage());
+        }
     }
 
     @Override

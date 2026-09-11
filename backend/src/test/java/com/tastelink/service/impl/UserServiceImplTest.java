@@ -8,7 +8,9 @@ import com.tastelink.entity.User;
 import com.tastelink.exception.BusinessException;
 import com.tastelink.mapper.FollowMapper;
 import com.tastelink.mapper.UserMapper;
+import com.tastelink.security.JwtBlacklistService;
 import com.tastelink.security.JwtUtil;
+import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,8 +33,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * UserServiceImpl.login 登录防爆破单测（B1-2，Mockito 不依赖 Docker）。
- * 覆盖：达阈值 42901、失败计数首击补窗口、成功清零、Redis 缺席 fail-open。
+ * UserServiceImpl 单测（Mockito 不依赖 Docker）。
+ * B1-2 登录防爆破：达阈值 42901、失败计数首击补窗口、成功清零、Redis 缺席 fail-open。
+ * B1-3 登出：jti 按剩余 TTL 入黑名单、过期/非法 token 静默成功。
  */
 @ExtendWith(MockitoExtension.class)
 class UserServiceImplTest {
@@ -52,14 +55,17 @@ class UserServiceImplTest {
     @Mock
     private RedisKeyNamespace redisKeys;
     @Mock
+    private JwtBlacklistService jwtBlacklistService;
+    @Mock
     private ValueOperations<String, String> valueOps;
 
     private UserServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new UserServiceImpl(userMapper, followMapper, passwordEncoder, jwtUtil, redis, redisKeys);
-        when(redisKeys.key(anyString())).thenAnswer(inv -> "tastelink:local:" + inv.getArgument(0));
+        service = new UserServiceImpl(userMapper, followMapper, passwordEncoder, jwtUtil, redis, redisKeys,
+                jwtBlacklistService);
+        org.mockito.Mockito.lenient().when(redisKeys.key(anyString())).thenAnswer(inv -> "tastelink:local:" + inv.getArgument(0));
     }
 
     private LoginRequest req() {
@@ -142,5 +148,38 @@ class UserServiceImplTest {
         // 限流器故障不得锁死登录：照常走账密校验，失败仍 401；计数失败也吞掉
         BusinessException ex = assertThrows(BusinessException.class, () -> service.login(req()));
         assertEquals(ResultCode.UNAUTHORIZED.getCode(), ex.getCode());
+    }
+
+    // ---------- B1-3 登出黑名单 ----------
+
+    @Test
+    void logout_validToken_revokesJtiWithRemainingTtl() {
+        Claims claims = org.mockito.Mockito.mock(Claims.class);
+        when(claims.getId()).thenReturn("jti-9");
+        when(claims.getExpiration()).thenReturn(new java.util.Date(System.currentTimeMillis() + 3600_000));
+        when(jwtUtil.parse("good-token")).thenReturn(claims);
+
+        service.logout("good-token");
+
+        // 剩余 TTL ≈3600s（允许执行耗时误差）
+        verify(jwtBlacklistService).revoke(eq("jti-9"),
+                org.mockito.ArgumentMatchers.longThat(v -> v > 3500 && v <= 3600));
+    }
+
+    @Test
+    void logout_expiredOrBadToken_silentlySucceeds() {
+        when(jwtUtil.parse("bad-token")).thenThrow(new RuntimeException("expired"));
+
+        service.logout("bad-token");                               // 不抛
+
+        verifyNoInteractions(jwtBlacklistService);
+    }
+
+    @Test
+    void logout_blankToken_isNoOp() {
+        service.logout(null);
+        service.logout("");
+
+        verifyNoInteractions(jwtUtil, jwtBlacklistService);
     }
 }

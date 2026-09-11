@@ -18,6 +18,14 @@ public interface UserService {
     /** 登录：校验账号密码，签发 JWT */
     LoginVO login(LoginRequest req);
 
+    /**
+     * 登出（B1-3）：把当前 token 的 jti 写入 Redis 黑名单（剩余有效期 TTL），
+     * 命中黑名单的 token 再访问受保护接口返回 401。Redis 缺席时静默成功（降级为仅前端清态）。
+     *
+     * @param token 原始 JWT（不含 Bearer 前缀），可空
+     */
+    void logout(String token);
+
     /** 当前登录用户完整资料（含 username） */
     UserVO getCurrentUserVO();
 

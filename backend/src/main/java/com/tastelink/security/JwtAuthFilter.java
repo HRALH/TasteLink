@@ -26,6 +26,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtConfig jwtConfig;
     private final JwtUtil jwtUtil;
+    private final JwtBlacklistService jwtBlacklistService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
@@ -35,14 +36,19 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (StringUtils.hasText(token)) {
             try {
                 Claims claims = jwtUtil.parse(token);
-                Long userId = Long.valueOf(claims.get("userId", String.class));
-                String username = claims.getSubject();
-                String role = claims.get("role", String.class);
-                LoginUser principal = new LoginUser(userId, username, role);
-                UsernamePasswordAuthenticationToken auth =
-                        new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
-                auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(auth);
+                if (jwtBlacklistService.isRevoked(claims.getId())) {
+                    // B1-3：登出/吊销名单命中 → 按未登录处理（受保护接口由入口渲染 401）
+                    SecurityContextHolder.clearContext();
+                } else {
+                    Long userId = Long.valueOf(claims.get("userId", String.class));
+                    String username = claims.getSubject();
+                    String role = claims.get("role", String.class);
+                    LoginUser principal = new LoginUser(userId, username, role);
+                    UsernamePasswordAuthenticationToken auth =
+                            new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+                    auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(auth);
+                }
             } catch (Exception e) {
                 // token 非法/过期：清空上下文，按未登录处理（公开接口仍可放行，受保护接口由入口返回 401）
                 SecurityContextHolder.clearContext();
