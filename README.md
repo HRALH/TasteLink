@@ -228,6 +228,8 @@ docker compose --project-directory . -f docker/docker-compose.yml down        # 
 | [`docs/06-中间件升级开发计划.md`](docs/06-中间件升级开发计划.md) | v2 Redis/MQ/ES 升级计划与实施状态(§0.6) |
 | [`docs/07-前端开发计划.md`](docs/07-前端开发计划.md) | v2 前端重构计划(管理后台 / 视觉系统 / 测试) |
 | [`docs/08-运维部署指南.md`](docs/08-运维部署指南.md) | 本地起栈 / Docker 全栈 / `.env` / 中间件降级 / 测试 / 生产清单 |
+| [`docs/09-后端优化方案.md`](docs/09-后端优化方案.md) | 后端优化执行计划(安全 P0 / 正确性 / 索引 / 可观测性,`feature/backend-optimization` 分支) |
+| [`docs/10-前端优化方案.md`](docs/10-前端优化方案.md) | 前端优化执行计划(真 bug / 数据获取层 / 构建瘦身 / 图片 / 测试,`feature/frontend-optimization` 分支) |
 
 ## 开源协议
 

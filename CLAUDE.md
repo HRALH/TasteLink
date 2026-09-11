@@ -14,7 +14,9 @@ TasteLink is a 城市餐饮口碑社区 (city food review community) — a monor
 - `05-接口API设计.md` — REST contract, all paths/params/returns. **API changes must update this doc and be reflected in both `frontend/src/api/*` and the relevant backend controller.**
 - `06-中间件升级开发计划.md` — v2 middleware upgrade plan (Redis 热度排行 / 角色鉴权+乐观锁 / RabbitMQ 延时清理 / ES+Canal). **主序列已完成并合入 `main`** — Phase 0/A/B/C(C-Full)/D 应用层 + Testcontainers 测试基线 + 文档同步全部落地;§0.6 给出逐阶段核验表。Canal binlog 增量同步、IK 中文分词、XXL-JOB、Redisson 为**计划内延后/infra 待办**;各 Phase 落地细节见下文「Backend architecture」对应小节。
 - `07-前端开发计划.md` — v2 frontend plan (admin 后台 FE-0+B+C / 视觉系统「赤金暖纸」重构 / 前端测试基线)。
-- `08-运维部署指南.md` — ops/deploy guide (本地起栈 / `docker/` 全栈 Docker 部署 / `.env` 模板 / 中间件配置与降级 / 测试 / 生产清单)。`docker/` 目录含 `Dockerfile.backend`、`Dockerfile.frontend`、`nginx.conf`、`docker/docker-compose.yml`(全栈编排,须 `--project-directory .` 运行)。
+- `08-运维部署指南.md` — ops/deploy guide (本地起栈 / `docker/` 全栈 Docker 部署 / `.env` 模板 / 中间件配置与降级 / 测试 / 生产清单)。`docker/` 目录含 `Dockerfile.backend`、`Dockerfile.frontend`、`nginx.conf`、`docker/docker-compose.yml`(全栈编排,须 `--project-directory .` 运行)。注意有**两个 compose 文件**:仓库根的 `docker-compose.yml` 只起本地中间件(redis / rabbitmq / elasticsearch,刻意不含 MySQL——避免与本地已有 3306 实例冲突),下文各 `docker compose up -d <mw>` 命令都指向它;`docker/docker-compose.yml` 才是全栈部署。
+- `09-后端优化方案.md` — backend 优化执行计划(安全 P0 / 正确性 / 索引与事务 / 可观测性,含 ponytail 做减法清单),对应 `feature/backend-optimization` 分支。
+- `10-前端优化方案.md` — frontend 优化执行计划(真 bug / React Query 数据层 / 构建瘦身 / 图片 / 测试,含 ponytail 做减法清单),对应 `feature/frontend-optimization` 分支。
 
 ## Commands
 
@@ -43,7 +45,7 @@ npm run test       # vitest watch (jsdom + RTL + msw)
 npm run test:run   # vitest one-shot
 npm run preview    # serve build output
 ```
-Tests live under `src/test/` (vitest config in `vitest.config.ts`); `src/test/**` is excluded from `tsc -b` so build ignores test files. Start the backend first for full-stack dev; the SPA renders its skeleton even when the API is down.
+Tests live under `src/test/` (vitest config in `vitest.config.ts`); `src/test/**` is excluded from `tsc -b` so build ignores test files. vitest runs with `globals: false` — every test file must `import { describe, it, expect } from 'vitest'` explicitly. Start the backend first for full-stack dev; the SPA renders its skeleton even when the API is down.
 
 ## Configuration & secrets
 
@@ -57,7 +59,7 @@ Tests live under `src/test/` (vitest config in `vitest.config.ts`); `src/test/**
 
 ## Backend architecture
 
-Package root `com.tastelink` (see `docs/02` for the full map): `config / common / exception / security / entity / mapper / service+impl / controller / dto(request|response) / utils`. Controllers all mount under `/api/v1`.
+Package root `com.tastelink` (see `docs/02` for the full map): `config / common / exception / security / entity / mapper / service+impl / controller / consumer(MQ 消费者) / dto(request|response|mq) / utils`. Controllers all mount under `/api/v1`.
 
 Conventions that span multiple files and aren't obvious from a single one:
 - **Unified envelope**: every controller returns `R<T> = {code, message, data}`; `code=0` = success. `GlobalExceptionHandler` (`@RestControllerAdvice`) maps validation→400, `BusinessException`→its code, auth→401/403, and a catch-all→500 — and does **not** leak SQL/stacks to the client. Throw `BusinessException(ResultCode.X, msg)` for business errors.
