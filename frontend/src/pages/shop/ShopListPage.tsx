@@ -133,7 +133,10 @@ export default function ShopListPage() {
             current={page}
             pageSize={DEFAULT_SIZE}
             total={result.total}
-            onChange={setPage}
+            onChange={(p) => {
+              setPage(p)
+              window.scrollTo({ top: 0 })
+            }}
             showSizeChanger={false}
           />
         </>

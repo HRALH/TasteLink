@@ -98,6 +98,7 @@ export default function UserHomePage() {
               </Link>
             ) : (
               <FollowButton
+                key={user.id}
                 userId={user.id}
                 hasFollowed={user.hasFollowed}
                 onChange={(f) =>
@@ -137,7 +138,10 @@ export default function UserHomePage() {
             current={page}
             pageSize={DEFAULT_SIZE}
             total={reviews.total}
-            onChange={setPage}
+            onChange={(p) => {
+              setPage(p)
+              window.scrollTo({ top: 0 })
+            }}
             showSizeChanger={false}
           />
         </>

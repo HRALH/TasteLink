@@ -52,7 +52,7 @@ export default function FollowButton({
       onClick={toggle}
       className="tl-press"
       icon={
-        <span key={burst} className={burst ? 'tl-heartburst' : undefined}>
+        <span key={burst} aria-hidden className={burst ? 'tl-heartburst' : undefined}>
           {followed ? <CheckOutlined /> : <PlusOutlined />}
         </span>
       }

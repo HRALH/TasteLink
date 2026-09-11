@@ -52,7 +52,10 @@ export default function FollowList({
             current={page}
             pageSize={DEFAULT_SIZE}
             total={data.total}
-            onChange={setPage}
+            onChange={(p) => {
+              setPage(p)
+              window.scrollTo({ top: 0 })
+            }}
             showSizeChanger={false}
           />
         </>

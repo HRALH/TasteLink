@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button, Card, Form, Input, Rate, message } from 'antd'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import UploadImage from '../../components/UploadImage'
 import SectionTitle from '../../components/editorial/SectionTitle'
 import { Reveal } from '../../components/motion'
@@ -32,6 +32,9 @@ export default function ShopReviewPage() {
       .then(setShop)
       .catch(() => {})
   }, [shopId])
+
+  // 非法 shopId（如 /shops/abc/review）兜底跳列表，避免表单提交到 POST /shops/NaN/reviews
+  if (Number.isNaN(shopId)) return <Navigate to="/shops" replace />
 
   const onFinish = async (values: ReviewFormValues) => {
     setSubmitting(true)

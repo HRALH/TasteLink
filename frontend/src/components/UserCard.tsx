@@ -25,7 +25,7 @@ export default function UserCard({ user }: { user: UserVO }) {
           {user.bio || '暂无简介'}
         </div>
       </div>
-      <FollowButton userId={user.id} hasFollowed={user.hasFollowed} />
+      <FollowButton key={user.id} userId={user.id} hasFollowed={user.hasFollowed} />
     </Space>
   )
 }
