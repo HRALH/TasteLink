@@ -15,6 +15,8 @@ export const Code = {
   ALREADY_LIKED: 40902,
   ALREADY_FOLLOWED: 40903,
   CANNOT_FOLLOW_SELF: 40904,
+  /** 登录频次受限（后端 B1 滑窗限流，按 HTTP 200 信封返回此码，普通 toast 即可） */
+  LOGIN_RATE_LIMITED: 42901,
   SERVER_ERROR: 500,
 } as const
 

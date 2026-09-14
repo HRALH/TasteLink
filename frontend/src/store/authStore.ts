@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { authApi } from '../api/auth'
 import type { UserInfo } from '../types/api'
 import { AUTH_STORAGE_KEY } from '../utils/constants'
 import { getRoleFromToken, isTokenExpired, type Role } from '../utils/jwt'
@@ -33,7 +34,14 @@ export const useAuthStore = create<AuthState>()(
       isLoggedIn: false,
       login: (token, userInfo) =>
         set({ token, userInfo, role: getRoleFromToken(token) ?? null, isLoggedIn: true }),
-      logout: () => set({ token: null, userInfo: null, role: null, isLoggedIn: false }),
+      logout: () => {
+        // 跨端契约接线：best-effort 通知后端清理 JWT 黑名单/会话态
+        // 后端未上线或失败不阻塞前端清态（catch 吞掉，行为与未接线时一致）
+        if (get().token) {
+          void authApi.logout().catch(() => {})
+        }
+        set({ token: null, userInfo: null, role: null, isLoggedIn: false })
+      },
       updateProfile: (partial) =>
         set((s) => (s.userInfo ? { userInfo: { ...s.userInfo, ...partial } } : s)),
       rehydrateRole: () => {
