@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# F3-3 构建体积报告（npm run build 生成，入库前目检用，不落库）
+stats.html
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
