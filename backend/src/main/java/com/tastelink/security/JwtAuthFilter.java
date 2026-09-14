@@ -7,6 +7,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -20,6 +21,7 @@ import java.io.IOException;
  * JWT 鉴权过滤器：解析 Authorization: Bearer，校验通过写入 SecurityContext。
  * 白名单请求即便无 token，也安全放行（由 SecurityFilterChain 的授权规则决定）。
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
@@ -51,6 +53,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 }
             } catch (Exception e) {
                 // token 非法/过期：清空上下文，按未登录处理（公开接口仍可放行，受保护接口由入口返回 401）
+                // B4-2：补 debug 日志，便于排查 401 归因（token 过期 vs 被篡改 vs 黑名单命中）
+                log.debug("jwt parse failed, treat as anonymous: {}", e.getMessage());
                 SecurityContextHolder.clearContext();
             }
         }

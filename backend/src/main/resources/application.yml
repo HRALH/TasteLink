@@ -82,6 +82,11 @@ management:
     health:
       show-details: never   # 不向前端泄露组件详情（DB/Redis/MQ 状态）
 
+# B4-2 traceId：日志 pattern 加 [%X{traceId}]，由 TraceIdFilter 注入 MDC
+logging:
+  pattern:
+    level: "%5p [%X{traceId:-}]"
+
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
