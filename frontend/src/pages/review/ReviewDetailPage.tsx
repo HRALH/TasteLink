@@ -26,6 +26,7 @@ import SectionTitle from '../../components/editorial/SectionTitle'
 import { Reveal } from '../../components/motion'
 import { palette } from '../../styles/tokens'
 import { thumb } from '../../utils/thumb'
+import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 
 const { TextArea } = Input
 
@@ -54,6 +55,9 @@ export default function ReviewDetailPage() {
 
   const review = reviewQuery.data
   const comments = commentsQuery.data
+
+  // F5-3：详情页带点评内容摘要进文档标题（截断 20 字）
+  useDocumentTitle(review ? review.content.slice(0, 20) : undefined)
 
   // 点赞：onMutate 快照乐观翻 → onError 回滚 → onSuccess 以服务端 likeCount 为准
   const likeMutation = useMutation({

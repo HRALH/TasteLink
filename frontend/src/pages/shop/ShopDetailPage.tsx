@@ -25,6 +25,7 @@ import Eyebrow from '../../components/editorial/Eyebrow'
 import { Reveal } from '../../components/motion'
 import { staggerDelay } from '../../utils/motion'
 import { thumb } from '../../utils/thumb'
+import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { shopApi } from '../../api/shop'
 import { palette } from '../../styles/tokens'
 import { DEFAULT_PAGE, DEFAULT_SIZE, ReviewSort } from '../../utils/constants'
@@ -50,6 +51,9 @@ export default function ShopDetailPage() {
 
   const shop = shopQuery.data
   const reviews = reviewsQuery.data
+
+  // F5-3：详情页带店铺名进文档标题
+  useDocumentTitle(shop?.name)
 
   if (!shopIdValid) return <Empty description="店铺不存在或已下架" />
   if (shopQuery.isPending) return <Skeleton active />
