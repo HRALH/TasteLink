@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   Avatar,
   Button,
@@ -13,14 +13,16 @@ import {
   Typography,
 } from 'antd'
 import { Link, useParams } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import ReviewCard from '../../components/ReviewCard'
 import FollowButton from '../../components/FollowButton'
+import QueryError from '../../components/QueryError'
 import SectionTitle from '../../components/editorial/SectionTitle'
 import { Reveal } from '../../components/motion'
 import { staggerDelay } from '../../utils/motion'
 import { userApi } from '../../api/user'
 import { palette } from '../../styles/tokens'
-import type { PageResult, ReviewVO, UserVO } from '../../types/api'
+import type { UserVO } from '../../types/api'
 import { DEFAULT_PAGE, DEFAULT_SIZE } from '../../utils/constants'
 import { useAuthStore } from '../../store/authStore'
 
@@ -29,36 +31,30 @@ const { Paragraph } = Typography
 export default function UserHomePage() {
   const { id } = useParams<{ id: string }>()
   const userId = Number(id)
+  const userIdValid = !Number.isNaN(userId) && userId > 0
   const me = useAuthStore((s) => s.userInfo)
   const isMe = me?.userId === userId
+  const queryClient = useQueryClient()
 
-  const [user, setUser] = useState<UserVO | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [reviews, setReviews] = useState<PageResult<ReviewVO> | null>(null)
   const [page, setPage] = useState(DEFAULT_PAGE)
-  const [loadingReviews, setLoadingReviews] = useState(false)
 
-  useEffect(() => {
-    if (!userId) return
-    setLoading(true)
-    userApi
-      .get(userId)
-      .then(setUser)
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [userId])
+  const userQuery = useQuery({
+    queryKey: ['user', userId],
+    queryFn: () => userApi.get(userId),
+    enabled: userIdValid,
+  })
+  const reviewsQuery = useQuery({
+    queryKey: ['userReviews', userId, page],
+    queryFn: () => userApi.reviews(userId, { page, size: DEFAULT_SIZE }),
+    enabled: userIdValid,
+  })
 
-  useEffect(() => {
-    if (!userId) return
-    setLoadingReviews(true)
-    userApi
-      .reviews(userId, { page, size: DEFAULT_SIZE })
-      .then(setReviews)
-      .catch(() => setReviews(null))
-      .finally(() => setLoadingReviews(false))
-  }, [userId, page])
+  const user = userQuery.data
+  const reviews = reviewsQuery.data
 
-  if (loading) return <Skeleton avatar active />
+  if (!userIdValid) return <Empty description="用户不存在" />
+  if (userQuery.isPending) return <Skeleton avatar active />
+  if (userQuery.isError) return <QueryError onRetry={() => userQuery.refetch()} />
   if (!user) return <Empty description="用户不存在" />
 
   return (
@@ -102,7 +98,7 @@ export default function UserHomePage() {
                 userId={user.id}
                 hasFollowed={user.hasFollowed}
                 onChange={(f) =>
-                  setUser((u) =>
+                  queryClient.setQueryData<UserVO>(['user', userId], (u) =>
                     u
                       ? { ...u, hasFollowed: f, followerCount: u.followerCount + (f ? 1 : -1) }
                       : u,
@@ -117,8 +113,10 @@ export default function UserHomePage() {
       <Reveal>
         <SectionTitle eyebrow="REVIEWS">Ta的点评</SectionTitle>
       </Reveal>
-      {loadingReviews ? (
+      {reviewsQuery.isPending ? (
         <Skeleton active />
+      ) : reviewsQuery.isError ? (
+        <QueryError onRetry={() => reviewsQuery.refetch()} />
       ) : !reviews?.records?.length ? (
         <Empty description="暂无点评" />
       ) : (
