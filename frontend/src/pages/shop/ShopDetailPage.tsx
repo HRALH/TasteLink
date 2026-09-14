@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   Button,
   Card,
@@ -17,49 +17,47 @@ import {
   PhoneOutlined,
 } from '@ant-design/icons'
 import { Link, useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import ReviewCard from '../../components/ReviewCard'
+import QueryError from '../../components/QueryError'
 import SectionTitle from '../../components/editorial/SectionTitle'
 import Eyebrow from '../../components/editorial/Eyebrow'
 import { Reveal } from '../../components/motion'
 import { staggerDelay } from '../../utils/motion'
+import { thumb } from '../../utils/thumb'
+import { useDocumentTitle } from '../../hooks/useDocumentTitle'
 import { shopApi } from '../../api/shop'
 import { palette } from '../../styles/tokens'
-import type { PageResult, ReviewVO, ShopDetailVO } from '../../types/api'
 import { DEFAULT_PAGE, DEFAULT_SIZE, ReviewSort } from '../../utils/constants'
 
 export default function ShopDetailPage() {
   const { id } = useParams<{ id: string }>()
   const shopId = Number(id)
-
-  const [shop, setShop] = useState<ShopDetailVO | null>(null)
-  const [loadingShop, setLoadingShop] = useState(false)
+  const shopIdValid = !Number.isNaN(shopId) && shopId > 0
 
   const [sortBy, setSortBy] = useState<string>(ReviewSort.TIME)
   const [page, setPage] = useState(DEFAULT_PAGE)
-  const [reviews, setReviews] = useState<PageResult<ReviewVO> | null>(null)
-  const [loadingReviews, setLoadingReviews] = useState(false)
 
-  useEffect(() => {
-    if (!shopId) return
-    setLoadingShop(true)
-    shopApi
-      .detail(shopId)
-      .then(setShop)
-      .catch(() => {})
-      .finally(() => setLoadingShop(false))
-  }, [shopId])
+  const shopQuery = useQuery({
+    queryKey: ['shop', shopId],
+    queryFn: () => shopApi.detail(shopId),
+    enabled: shopIdValid,
+  })
+  const reviewsQuery = useQuery({
+    queryKey: ['shopReviews', shopId, sortBy, page],
+    queryFn: () => shopApi.reviews(shopId, { sortBy, page, size: DEFAULT_SIZE }),
+    enabled: shopIdValid,
+  })
 
-  useEffect(() => {
-    if (!shopId) return
-    setLoadingReviews(true)
-    shopApi
-      .reviews(shopId, { sortBy, page, size: DEFAULT_SIZE })
-      .then(setReviews)
-      .catch(() => setReviews(null))
-      .finally(() => setLoadingReviews(false))
-  }, [shopId, sortBy, page])
+  const shop = shopQuery.data
+  const reviews = reviewsQuery.data
 
-  if (loadingShop) return <Skeleton active />
+  // F5-3：详情页带店铺名进文档标题
+  useDocumentTitle(shop?.name)
+
+  if (!shopIdValid) return <Empty description="店铺不存在或已下架" />
+  if (shopQuery.isPending) return <Skeleton active />
+  if (shopQuery.isError) return <QueryError onRetry={() => shopQuery.refetch()} />
   if (!shop) return <Empty description="店铺不存在或已下架" />
 
   return (
@@ -69,8 +67,10 @@ export default function ShopDetailPage() {
           {shop.coverUrl && (
             <div style={{ position: 'relative' }}>
               <img
-                src={shop.coverUrl}
+                src={thumb(shop.coverUrl, 960)}
                 alt={shop.name}
+                loading="lazy"
+                decoding="async"
                 style={{ width: '100%', height: 260, objectFit: 'cover', display: 'block' }}
               />
               <div
@@ -179,8 +179,10 @@ export default function ShopDetailPage() {
         </div>
       </Reveal>
 
-      {loadingReviews ? (
+      {reviewsQuery.isPending ? (
         <Skeleton active />
+      ) : reviewsQuery.isError ? (
+        <QueryError onRetry={() => reviewsQuery.refetch()} />
       ) : !reviews?.records?.length ? (
         <Empty description="暂无点评，快来抢沙发" />
       ) : (
@@ -200,7 +202,10 @@ export default function ShopDetailPage() {
             current={page}
             pageSize={DEFAULT_SIZE}
             total={reviews.total}
-            onChange={setPage}
+            onChange={(p) => {
+              setPage(p)
+              window.scrollTo({ top: 0 })
+            }}
             showSizeChanger={false}
           />
         </>

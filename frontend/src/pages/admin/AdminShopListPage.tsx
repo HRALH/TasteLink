@@ -1,17 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Card, Col, Empty, Input, Modal, Pagination, Row, Select, Skeleton, Space, message } from 'antd'
 import { SearchOutlined } from '@ant-design/icons'
 import { isAxiosError } from 'axios'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import AdminShopCard from '../../components/admin/AdminShopCard'
+import QueryError from '../../components/QueryError'
 import SectionTitle from '../../components/editorial/SectionTitle'
 import { Reveal } from '../../components/motion'
 import { staggerDelay } from '../../utils/motion'
 import { shopApi } from '../../api/shop'
 import { adminShopApi } from '../../api/admin'
 import { ApiError } from '../../api/request'
+import { useCategories } from '../../hooks/useCategories'
 import { Code, CITIES, DEFAULT_PAGE, DEFAULT_SIZE } from '../../utils/constants'
-import type { CategoryVO, PageResult, ShopVO } from '../../types/api'
+import type { ShopVO } from '../../types/api'
 
 /**
  * 店铺管理列表（v2 FE-B + FE-C）。
@@ -25,30 +28,29 @@ export default function AdminShopListPage() {
   const [city, setCity] = useState<string>('')
   const [page, setPage] = useState(DEFAULT_PAGE)
 
-  const [categories, setCategories] = useState<CategoryVO[]>([])
-  const [result, setResult] = useState<PageResult<ShopVO> | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [refreshKey, setRefreshKey] = useState(0)
+  const { data: categories = [] } = useCategories()
+  const {
+    data: result,
+    isPending,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ['shops', { keyword, categoryId, city, page }],
+    queryFn: () =>
+      shopApi.list({
+        keyword,
+        categoryId: categoryId || undefined,
+        city: city || undefined,
+        page,
+        size: DEFAULT_SIZE,
+      }),
+  })
 
-  useEffect(() => {
-    shopApi.categories().then(setCategories).catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    setLoading(true)
-    shopApi
-      .list({ keyword, categoryId: categoryId || undefined, city: city || undefined, page, size: DEFAULT_SIZE })
-      .then(setResult)
-      .catch(() => setResult(null))
-      .finally(() => setLoading(false))
-  }, [keyword, categoryId, city, page, refreshKey])
-
-  const refetch = () => setRefreshKey((k) => k + 1)
   const resetPage = () => setPage(DEFAULT_PAGE)
 
   const categoryOptions = [{ label: '全部分类', value: 0 }, ...categories.map((c) => ({ label: c.name, value: c.id }))]
   const cityOptions = [{ label: '全部城市', value: '' }, ...CITIES.map((c) => ({ label: c, value: c }))]
-  const resultKey = `${keyword ?? 'all'}-${categoryId}-${city}-${page}-${refreshKey}`
+  const resultKey = `${keyword ?? 'all'}-${categoryId}-${city}-${page}`
 
   const handleDelete = (shop: ShopVO) => {
     Modal.confirm({
@@ -63,7 +65,7 @@ export default function AdminShopListPage() {
           await adminShopApi.remove(shop.id)
           message.success('已删除，关联数据将在稍后自动清理')
           if (removedWasLast && page > 1) {
-            // 删尽当前页则回上一页（触发 effect 重新拉取）
+            // 删尽当前页则回上一页（key 变化触发重新拉取）
             setPage((p) => p - 1)
           } else {
             refetch()
@@ -128,8 +130,10 @@ export default function AdminShopListPage() {
         </Card>
       </Reveal>
 
-      {loading ? (
+      {isPending ? (
         <Skeleton active />
+      ) : isError ? (
+        <QueryError onRetry={() => refetch()} />
       ) : !result?.records?.length ? (
         <Empty description="没有可管理的店铺" />
       ) : (
@@ -152,7 +156,10 @@ export default function AdminShopListPage() {
             current={page}
             pageSize={DEFAULT_SIZE}
             total={result.total}
-            onChange={setPage}
+            onChange={(p) => {
+              setPage(p)
+              window.scrollTo({ top: 0 })
+            }}
             showSizeChanger={false}
           />
         </>

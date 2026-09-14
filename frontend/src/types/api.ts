@@ -24,14 +24,12 @@ export interface PageQuery {
   size?: number
 }
 
-/** 登录用户摘要（authStore 持久化用） */
+/** 登录用户摘要（authStore 持久化用）。角色不落于此——role 存 authStore 顶层、由 JWT claim 解出 */
 export interface UserInfo {
   userId: number
   username: string
   nickname: string
   avatarUrl: string
-  /** 角色（v2 由 JWT claim 解出，后端 LoginVO 未带）；'ADMIN' 管理员 / 'USER' 普通 */
-  role?: 'USER' | 'ADMIN'
 }
 
 // ===== VO =====

@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button, Card, Form, Input, Rate, message } from 'antd'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import UploadImage from '../../components/UploadImage'
 import SectionTitle from '../../components/editorial/SectionTitle'
 import { Reveal } from '../../components/motion'
 import { reviewApi } from '../../api/review'
 import { shopApi } from '../../api/shop'
-import type { ShopDetailVO } from '../../types/api'
 import { MAX_REVIEW_IMAGES } from '../../utils/constants'
 
 const { TextArea } = Input
@@ -22,33 +22,30 @@ export default function ShopReviewPage() {
   const navigate = useNavigate()
   const [form] = Form.useForm<ReviewFormValues>()
   const [imageUrls, setImageUrls] = useState<string[]>([])
-  const [submitting, setSubmitting] = useState(false)
-  const [shop, setShop] = useState<ShopDetailVO | null>(null)
 
-  useEffect(() => {
-    if (!shopId) return
-    shopApi
-      .detail(shopId)
-      .then(setShop)
-      .catch(() => {})
-  }, [shopId])
+  // 店名仅作标题展示（「给「x」写点评」），失败不阻断表单，无需错误态
+  const { data: shop } = useQuery({
+    queryKey: ['shop', shopId],
+    queryFn: () => shopApi.detail(shopId),
+    enabled: !Number.isNaN(shopId) && shopId > 0,
+  })
 
-  const onFinish = async (values: ReviewFormValues) => {
-    setSubmitting(true)
-    try {
-      const review = await reviewApi.create(shopId, {
+  const createMutation = useMutation({
+    mutationFn: (values: ReviewFormValues) =>
+      reviewApi.create(shopId, {
         content: values.content,
         rating: values.rating,
         imageUrls,
-      })
+      }),
+    onSuccess: (review) => {
       message.success('发布成功')
       navigate(`/reviews/${review.id}`, { replace: true })
-    } catch {
-      // 错误提示已由 request 拦截器统一处理
-    } finally {
-      setSubmitting(false)
-    }
-  }
+    },
+    // 错误提示已由 request 拦截器统一处理
+  })
+
+  // 非法 shopId（如 /shops/abc/review）兜底跳列表，避免表单提交到 POST /shops/NaN/reviews
+  if (Number.isNaN(shopId)) return <Navigate to="/shops" replace />
 
   return (
     <Reveal>
@@ -56,7 +53,12 @@ export default function ShopReviewPage() {
         <SectionTitle eyebrow="WRITE A REVIEW" size="md">
           {shop ? `给「${shop.name}」写点评` : '写点评'}
         </SectionTitle>
-        <Form form={form} layout="vertical" initialValues={{ rating: 5 }} onFinish={onFinish}>
+        <Form
+          form={form}
+          layout="vertical"
+          initialValues={{ rating: 5 }}
+          onFinish={(values) => createMutation.mutate(values)}
+        >
           <Form.Item name="rating" label="评分" rules={[{ required: true, message: '请选择评分' }]}>
             <Rate />
           </Form.Item>
@@ -74,7 +76,7 @@ export default function ShopReviewPage() {
             type="primary"
             shape="round"
             htmlType="submit"
-            loading={submitting}
+            loading={createMutation.isPending}
             className="tl-press"
           >
             发布点评

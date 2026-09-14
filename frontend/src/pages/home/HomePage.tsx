@@ -1,30 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button, Col, Empty, Row, Segmented, Skeleton } from 'antd'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { homeApi } from '../../api/home'
 import ShopCard from '../../components/ShopCard'
 import ReviewCard from '../../components/ReviewCard'
+import QueryError from '../../components/QueryError'
 import SectionTitle from '../../components/editorial/SectionTitle'
 import Eyebrow from '../../components/editorial/Eyebrow'
 import { Reveal } from '../../components/motion'
 import { staggerDelay } from '../../utils/motion'
 import { palette } from '../../styles/tokens'
-import type { HomeVO } from '../../types/api'
 import { CITIES } from '../../utils/constants'
 
 export default function HomePage() {
   const [city, setCity] = useState<string | undefined>(undefined)
-  const [data, setData] = useState<HomeVO | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    setLoading(true)
-    homeApi
-      .home(city)
-      .then(setData)
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [city])
+  const { data, isPending, isError, refetch } = useQuery({
+    queryKey: ['home', city ?? ''],
+    queryFn: () => homeApi.home(city),
+  })
 
   const cityOptions = [{ label: '全部', value: '' }, ...CITIES.map((c) => ({ label: c, value: c }))]
   const cityKey = city ?? 'all'
@@ -84,8 +78,10 @@ export default function HomePage() {
       <Reveal>
         <SectionTitle eyebrow="HOT SHOPS">热门店铺</SectionTitle>
       </Reveal>
-      {loading ? (
+      {isPending ? (
         <Skeleton active />
+      ) : isError ? (
+        <QueryError onRetry={() => refetch()} />
       ) : !data?.hotShops?.length ? (
         <Empty description="暂无热门店铺" />
       ) : (
@@ -103,8 +99,10 @@ export default function HomePage() {
       <Reveal>
         <SectionTitle eyebrow="HOT REVIEWS">热门点评</SectionTitle>
       </Reveal>
-      {loading ? (
+      {isPending ? (
         <Skeleton active />
+      ) : isError ? (
+        <QueryError onRetry={() => refetch()} />
       ) : !data?.hotReviews?.length ? (
         <Empty description="暂无热门点评" />
       ) : (

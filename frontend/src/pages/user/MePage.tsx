@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Avatar, Button, Card, Form, Input, Skeleton, message } from 'antd'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import UploadImage from '../../components/UploadImage'
+import QueryError from '../../components/QueryError'
 import SectionTitle from '../../components/editorial/SectionTitle'
 import { userApi } from '../../api/user'
 import { useAuthStore } from '../../store/authStore'
 import { palette } from '../../styles/tokens'
-import type { UserVO } from '../../types/api'
 
 const { TextArea } = Input
 
@@ -16,45 +17,37 @@ interface ProfileFormValues {
 
 export default function MePage() {
   const updateProfile = useAuthStore((s) => s.updateProfile)
-  const [user, setUser] = useState<UserVO | null>(null)
-  const [loading, setLoading] = useState(false)
+  const queryClient = useQueryClient()
   const [form] = Form.useForm<ProfileFormValues>()
-  const [avatarUrl, setAvatarUrl] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  // 仅承载「本次新上传的头像」；未改动时回落到已加载资料的头像（免 effect 回填 setState）
+  const [avatarDraft, setAvatarDraft] = useState<string | null>(null)
 
-  useEffect(() => {
-    setLoading(true)
-    userApi
-      .me()
-      .then((u) => {
-        setUser(u)
-        setAvatarUrl(u.avatarUrl || '')
-        form.setFieldsValue({ nickname: u.nickname, bio: u.bio || '' })
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [form])
+  const userQuery = useQuery({ queryKey: ['me'], queryFn: () => userApi.me() })
+  const user = userQuery.data
 
-  const onSave = async (values: ProfileFormValues) => {
-    setSubmitting(true)
-    try {
-      const updated = await userApi.updateMe({
+  const saveMutation = useMutation({
+    mutationFn: (values: ProfileFormValues) =>
+      userApi.updateMe({
         nickname: values.nickname,
         bio: values.bio,
-        avatarUrl: avatarUrl || undefined,
-      })
-      setUser(updated)
-      setAvatarUrl(updated.avatarUrl || '')
+        avatarUrl: (avatarDraft ?? user?.avatarUrl) || undefined,
+      }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['me'], updated)
+      queryClient.invalidateQueries({ queryKey: ['user', updated.id] })
+      setAvatarDraft(null)
       updateProfile({ nickname: updated.nickname, avatarUrl: updated.avatarUrl })
       message.success('保存成功')
-    } catch {
-      // 错误提示已由 request 拦截器统一处理
-    } finally {
-      setSubmitting(false)
-    }
-  }
+    },
+    // 错误提示已由 request 拦截器统一处理
+  })
 
-  if (loading || !user) return <Skeleton avatar active />
+  if (userQuery.isPending) return <Skeleton avatar active />
+  if (userQuery.isError) return <QueryError onRetry={() => userQuery.refetch()} />
+  if (!user) return <Skeleton avatar active />
+
+  // Form 在数据就绪后才挂载，initialValues 一次性填充（替代原 effect setFieldsValue）
+  const displayAvatar = avatarDraft ?? user.avatarUrl
 
   return (
     <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
@@ -62,18 +55,26 @@ export default function MePage() {
         <SectionTitle size="sm" style={{ marginBottom: 12 }}>
           头像
         </SectionTitle>
-        <Avatar size={96} src={avatarUrl || user.avatarUrl} style={{ background: palette.rule }}>
+        <Avatar size={96} src={displayAvatar} style={{ background: palette.rule }}>
           {user.nickname?.[0]}
         </Avatar>
         <div style={{ marginTop: 16 }}>
-          <UploadImage onChange={(urls) => setAvatarUrl(urls[urls.length - 1] || '')} maxCount={1} />
+          <UploadImage
+            onChange={(urls) => setAvatarDraft(urls[urls.length - 1] || null)}
+            maxCount={1}
+          />
         </div>
       </Card>
       <Card className="tl-card" style={{ flex: '1 1 320px' }}>
         <SectionTitle size="sm" style={{ marginBottom: 12 }}>
           编辑资料
         </SectionTitle>
-        <Form form={form} layout="vertical" onFinish={onSave}>
+        <Form
+          form={form}
+          layout="vertical"
+          initialValues={{ nickname: user.nickname, bio: user.bio || '' }}
+          onFinish={(values) => saveMutation.mutate(values)}
+        >
           <Form.Item label="用户名">
             <Input value={user.username} disabled />
           </Form.Item>
@@ -83,7 +84,7 @@ export default function MePage() {
           <Form.Item name="bio" label="简介">
             <TextArea rows={3} maxLength={100} showCount placeholder="介绍一下自己吧" />
           </Form.Item>
-          <Button type="primary" shape="round" htmlType="submit" loading={submitting}>
+          <Button type="primary" shape="round" htmlType="submit" loading={saveMutation.isPending}>
             保存
           </Button>
         </Form>

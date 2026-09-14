@@ -3,6 +3,7 @@ import { LikeOutlined, MessageOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
 import type { ReviewVO } from '../types/api'
 import { palette } from '../styles/tokens'
+import { thumb } from '../utils/thumb'
 
 /** 点评卡片：杂志引文 —— 署名 + 评分 + 宋体引文正文 + 图片 + 点赞/评论/详情 */
 export default function ReviewCard({
@@ -54,9 +55,11 @@ export default function ReviewCard({
             {review.images.slice(0, 4).map((url, i) => (
               <AntImage
                 key={i}
-                src={url}
+                src={thumb(url, 160)}
+                alt={`${review.userNickname}的点评图片 ${i + 1}`}
                 width={80}
                 height={80}
+                preview={{ src: url }}
                 style={{ objectFit: 'cover', borderRadius: 8 }}
               />
             ))}

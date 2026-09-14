@@ -1,14 +1,16 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { authApi } from '../api/auth'
 import type { UserInfo } from '../types/api'
 import { AUTH_STORAGE_KEY } from '../utils/constants'
-import { getRoleFromToken, type Role } from '../utils/jwt'
+import { getRoleFromToken, isTokenExpired, type Role } from '../utils/jwt'
 
 /**
  * 全局登录态（docs/03 §5.2）
- * - token / userInfo / role 持久化到 localStorage，刷新页面恢复
- * - role 由 JWT 解出（后端 LoginVO 未带 role，仅 JWT claim 携带）——仅供 UI 显隐 / 路由守卫，
- *   真正鉴权仍由后端 `/admin/**` 的 hasRole('ADMIN') 强制（非管理员得到 403）
+ * - token / userInfo / isLoggedIn 持久化到 localStorage，刷新页面恢复
+ * - role 由 JWT 解出（后端 LoginVO 未带 role，仅 JWT claim 携带），**不持久化**——
+ *   每次加载由 rehydrateRole() 从 token 重新推导，避免冗余存储漂移。
+ *   role 仅供 UI 显隐 / 路由守卫，真正鉴权仍由后端 `/admin/**` 的 hasRole('ADMIN') 强制（403）
  * - 动作：login(token, userInfo)、logout()、updateProfile(partial)、rehydrateRole()
  */
 interface AuthState {
@@ -32,7 +34,14 @@ export const useAuthStore = create<AuthState>()(
       isLoggedIn: false,
       login: (token, userInfo) =>
         set({ token, userInfo, role: getRoleFromToken(token) ?? null, isLoggedIn: true }),
-      logout: () => set({ token: null, userInfo: null, role: null, isLoggedIn: false }),
+      logout: () => {
+        // 跨端契约接线：best-effort 通知后端清理 JWT 黑名单/会话态
+        // 后端未上线或失败不阻塞前端清态（catch 吞掉，行为与未接线时一致）
+        if (get().token) {
+          void authApi.logout().catch(() => {})
+        }
+        set({ token: null, userInfo: null, role: null, isLoggedIn: false })
+      },
       updateProfile: (partial) =>
         set((s) => (s.userInfo ? { userInfo: { ...s.userInfo, ...partial } } : s)),
       rehydrateRole: () => {
@@ -47,11 +56,16 @@ export const useAuthStore = create<AuthState>()(
       partialize: (s) => ({
         token: s.token,
         userInfo: s.userInfo,
-        role: s.role,
         isLoggedIn: s.isLoggedIn,
       }),
       onRehydrateStorage: () => (state) => {
-        if (state && state.token && state.role === null) state.rehydrateRole()
+        if (!state) return
+        // F5-2：持久化恢复时 token 已过期即清登录态，避免 UI 假登录态直到 401
+        if (state.token && isTokenExpired(state.token)) {
+          state.logout()
+          return
+        }
+        if (state.token && state.role === null) state.rehydrateRole()
       },
     },
   ),

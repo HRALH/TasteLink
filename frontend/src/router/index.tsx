@@ -1,23 +1,38 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import type { ReactNode } from 'react'
+import { Skeleton } from 'antd'
 import MainLayout from '../components/layout/MainLayout'
 import NotFound from '../pages/common/NotFound'
 
-// 页面（M10 为占位 stub，后续里程碑替换为真实实现）
+// 首屏页：静态引入
 import LoginPage from '../pages/auth/LoginPage'
 import RegisterPage from '../pages/auth/RegisterPage'
 import HomePage from '../pages/home/HomePage'
 import ShopListPage from '../pages/shop/ShopListPage'
 import ShopDetailPage from '../pages/shop/ShopDetailPage'
-import ShopReviewPage from '../pages/review/ShopReviewPage'
-import ReviewDetailPage from '../pages/review/ReviewDetailPage'
 import UserHomePage from '../pages/user/UserHomePage'
-import FollowingsPage from '../pages/user/FollowingsPage'
-import FollowersPage from '../pages/user/FollowersPage'
 import MePage from '../pages/user/MePage'
-import AdminShopListPage from '../pages/admin/AdminShopListPage'
-import AdminShopEditPage from '../pages/admin/AdminShopEditPage'
 import { useAuthStore } from '../store/authStore'
+
+// 低频/后台页（F3-1）：路由级代码分割，不进普通用户首屏
+const ShopReviewPage = lazy(() => import('../pages/review/ShopReviewPage'))
+const ReviewDetailPage = lazy(() => import('../pages/review/ReviewDetailPage'))
+const FollowingsPage = lazy(() => import('../pages/user/FollowingsPage'))
+const FollowersPage = lazy(() => import('../pages/user/FollowersPage'))
+const AdminShopListPage = lazy(() => import('../pages/admin/AdminShopListPage'))
+const AdminShopEditPage = lazy(() => import('../pages/admin/AdminShopEditPage'))
+
+/** 懒加载页 fallback：沿用全站骨架态（与页内加载态一致） */
+const pageFallback = (
+  <div style={{ padding: 24 }}>
+    <Skeleton active />
+  </div>
+)
+
+function lazyPage(el: ReactNode) {
+  return <Suspense fallback={pageFallback}>{el}</Suspense>
+}
 
 /**
  * 路由守卫：需登录页未登录跳 /login，携带 redirect 以便登录后回跳（docs/03 §4）
@@ -64,16 +79,16 @@ export default function AppRouter() {
         <Route path="/shops/:id" element={<ShopDetailPage />} />
         <Route
           path="/shops/:id/review"
-          element={
+          element={lazyPage(
             <RequireAuth>
               <ShopReviewPage />
-            </RequireAuth>
-          }
+            </RequireAuth>,
+          )}
         />
-        <Route path="/reviews/:id" element={<ReviewDetailPage />} />
+        <Route path="/reviews/:id" element={lazyPage(<ReviewDetailPage />)} />
         <Route path="/users/:id" element={<UserHomePage />} />
-        <Route path="/users/:id/followings" element={<FollowingsPage />} />
-        <Route path="/users/:id/followers" element={<FollowersPage />} />
+        <Route path="/users/:id/followings" element={lazyPage(<FollowingsPage />)} />
+        <Route path="/users/:id/followers" element={lazyPage(<FollowersPage />)} />
         <Route
           path="/me"
           element={
@@ -84,19 +99,19 @@ export default function AppRouter() {
         />
         <Route
           path="/admin/shops"
-          element={
+          element={lazyPage(
             <RequireAdmin>
               <AdminShopListPage />
-            </RequireAdmin>
-          }
+            </RequireAdmin>,
+          )}
         />
         <Route
           path="/admin/shops/:id/edit"
-          element={
+          element={lazyPage(
             <RequireAdmin>
               <AdminShopEditPage />
-            </RequireAdmin>
-          }
+            </RequireAdmin>,
+          )}
         />
       </Route>
 

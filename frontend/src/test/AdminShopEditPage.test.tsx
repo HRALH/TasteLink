@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { Route, Routes } from 'react-router-dom'
 
 // antd 静态 Modal/message 在 jsdom 无 App context 下渲染不可靠；注入 Modal.warning / message spy，
 // 断言“409 时是否唤起 Modal.warning”并直接调用其 onOk 验证“加载最新内容”行为。其余组件保持真实。
@@ -32,16 +32,17 @@ import { Modal } from 'antd'
 import AdminShopEditPage from '../pages/admin/AdminShopEditPage'
 import { aShop } from './handlers'
 import { server } from './server'
+import { Providers } from './render'
 import { useAuthStore } from '../store/authStore'
 
 function renderAt(path: string) {
   render(
-    <MemoryRouter initialEntries={[path]}>
+    <Providers initialEntries={[path]}>
       <Routes>
         <Route path="/admin/shops/:id/edit" element={<AdminShopEditPage />} />
         <Route path="/admin/shops" element={<div data-testid="admin-list">列表</div>} />
       </Routes>
-    </MemoryRouter>,
+    </Providers>,
   )
 }
 

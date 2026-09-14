@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Card, Col, Empty, Input, Pagination, Row, Segmented, Select, Skeleton, Space } from 'antd'
 import { SearchOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
 import ShopCard from '../../components/ShopCard'
+import QueryError from '../../components/QueryError'
 import SectionTitle from '../../components/editorial/SectionTitle'
 import { Reveal } from '../../components/motion'
 import { staggerDelay } from '../../utils/motion'
 import { shopApi } from '../../api/shop'
-import type { CategoryVO, PageResult, ShopVO } from '../../types/api'
+import { useCategories } from '../../hooks/useCategories'
 import { CITIES, DEFAULT_PAGE, DEFAULT_SIZE, ShopSort } from '../../utils/constants'
 
 export default function ShopListPage() {
@@ -17,32 +19,24 @@ export default function ShopListPage() {
   const [sortBy, setSortBy] = useState<string>(ShopSort.REVIEW_COUNT)
   const [page, setPage] = useState(DEFAULT_PAGE)
 
-  const [categories, setCategories] = useState<CategoryVO[]>([])
-  const [result, setResult] = useState<PageResult<ShopVO> | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    shopApi
-      .categories()
-      .then(setCategories)
-      .catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    setLoading(true)
-    shopApi
-      .list({
+  const { data: categories = [] } = useCategories()
+  const {
+    data: result,
+    isPending,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ['shops', { keyword, categoryId, city, sortBy, page }],
+    queryFn: () =>
+      shopApi.list({
         keyword,
         categoryId: categoryId || undefined,
         city: city || undefined,
         sortBy,
         page,
         size: DEFAULT_SIZE,
-      })
-      .then(setResult)
-      .catch(() => setResult(null))
-      .finally(() => setLoading(false))
-  }, [keyword, categoryId, city, sortBy, page])
+      }),
+  })
 
   const resetPage = () => setPage(DEFAULT_PAGE)
 
@@ -113,8 +107,10 @@ export default function ShopListPage() {
         </Card>
       </Reveal>
 
-      {loading ? (
+      {isPending ? (
         <Skeleton active />
+      ) : isError ? (
+        <QueryError onRetry={() => refetch()} />
       ) : !result?.records?.length ? (
         <Empty description="没有找到符合条件的店铺" />
       ) : (
@@ -133,7 +129,10 @@ export default function ShopListPage() {
             current={page}
             pageSize={DEFAULT_SIZE}
             total={result.total}
-            onChange={setPage}
+            onChange={(p) => {
+              setPage(p)
+              window.scrollTo({ top: 0 })
+            }}
             showSizeChanger={false}
           />
         </>
