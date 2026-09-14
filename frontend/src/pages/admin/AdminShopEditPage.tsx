@@ -1,15 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button, Card, Form, Input, Select, Skeleton, Modal, message } from 'antd'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import UploadImage from '../../components/UploadImage'
+import QueryError from '../../components/QueryError'
 import SectionTitle from '../../components/editorial/SectionTitle'
 import { Reveal } from '../../components/motion'
 import { shopApi } from '../../api/shop'
 import { adminShopApi } from '../../api/admin'
 import { ApiError } from '../../api/request'
+import { useCategories } from '../../hooks/useCategories'
 import { Code, CITIES } from '../../utils/constants'
 import { palette } from '../../styles/tokens'
-import type { CategoryVO, ShopDetailVO, UpdateShopRequest } from '../../types/api'
+import type { ShopDetailVO, UpdateShopRequest } from '../../types/api'
 
 const { TextArea } = Input
 
@@ -23,51 +26,36 @@ interface ShopFormValues {
 }
 
 /**
- * 店铺编辑页（v2 FE-B）。按 MePage 的 load → setFieldsValue → save 模式：
- * 公开 `GET /shops/{id}` 载入 → `PUT /admin/shops/{id}` 保存。
+ * 店铺编辑页（v2 FE-B）：公开 `GET /shops/{id}` 载入 → `PUT /admin/shops/{id}` 保存。
+ * 表单在数据就绪后挂载，initialValues 一次性填充（替代原 effect setFieldsValue）。
  * 后端乐观锁由 `@Version` 处理，客户端不携 version；冲突(409)弹「加载最新内容」。
  */
 export default function AdminShopEditPage() {
   const { id } = useParams<{ id: string }>()
   const shopId = Number(id)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [form] = Form.useForm<ShopFormValues>()
-  const [shop, setShop] = useState<ShopDetailVO | null>(null)
-  const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [coverUrl, setCoverUrl] = useState('')
-  const [categories, setCategories] = useState<CategoryVO[]>([])
+  // 仅承载「本次新上传的封面」；未改动时回落到店铺现有封面（免 effect 回填 setState）
+  const [coverDraft, setCoverDraft] = useState<string | null>(null)
 
-  useEffect(() => {
-    shopApi.categories().then(setCategories).catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    if (Number.isNaN(shopId)) return
-    setLoading(true)
-    shopApi
-      .detail(shopId)
-      .then((s) => {
-        setShop(s)
-        setCoverUrl(s.coverUrl || '')
-        form.setFieldsValue({
-          name: s.name,
-          categoryId: s.categoryId,
-          city: s.city,
-          address: s.address || '',
-          phone: s.phone || '',
-          description: s.description || '',
-        })
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [shopId, form])
+  const { data: categories = [] } = useCategories()
+  const shopQuery = useQuery({
+    queryKey: ['shop', shopId],
+    queryFn: () => shopApi.detail(shopId),
+    enabled: !Number.isNaN(shopId),
+  })
+  const shop = shopQuery.data
 
   if (Number.isNaN(shopId)) return <Navigate to="/admin/shops" replace />
-  if (loading || !shop) return <Skeleton active />
+  if (shopQuery.isPending) return <Skeleton active />
+  if (shopQuery.isError) return <QueryError onRetry={() => shopQuery.refetch()} />
+  if (!shop) return <Skeleton active />
 
   const categoryOptions = categories.map((c) => ({ label: c.name, value: c.id }))
   const cityOptions = CITIES.map((c) => ({ label: c, value: c }))
+  const coverUrl = coverDraft ?? shop.coverUrl
 
   const fillForm = (s: ShopDetailVO) => {
     form.setFieldsValue({
@@ -78,7 +66,7 @@ export default function AdminShopEditPage() {
       phone: s.phone || '',
       description: s.description || '',
     })
-    setCoverUrl(s.coverUrl || '')
+    setCoverDraft(null)
   }
 
   const onSave = async (values: ShopFormValues) => {
@@ -94,7 +82,9 @@ export default function AdminShopEditPage() {
         coverUrl: coverUrl || undefined,
         description: values.description || undefined,
       }
-      await adminShopApi.update(shopId, body)
+      const updated = await adminShopApi.update(shopId, body)
+      queryClient.setQueryData(['shop', shopId], updated)
+      queryClient.invalidateQueries({ queryKey: ['shops'] })
       message.success('已保存')
       navigate('/admin/shops')
     } catch (e) {
@@ -106,7 +96,7 @@ export default function AdminShopEditPage() {
           onOk: async () => {
             try {
               const latest = await shopApi.detail(shopId)
-              setShop(latest)
+              queryClient.setQueryData(['shop', shopId], latest)
               fillForm(latest)
               message.success('已加载最新内容')
             } catch {
@@ -128,7 +118,19 @@ export default function AdminShopEditPage() {
           <SectionTitle eyebrow="ADMIN" size="md">
             编辑店铺
           </SectionTitle>
-          <Form form={form} layout="vertical" onFinish={onSave}>
+          <Form
+            form={form}
+            layout="vertical"
+            initialValues={{
+              name: shop.name,
+              categoryId: shop.categoryId,
+              city: shop.city,
+              address: shop.address || '',
+              phone: shop.phone || '',
+              description: shop.description || '',
+            }}
+            onFinish={onSave}
+          >
             <Form.Item
               name="name"
               label="店铺名称"
@@ -165,7 +167,7 @@ export default function AdminShopEditPage() {
               ) : (
                 <div style={{ color: palette.muted, fontSize: 12, marginBottom: 12 }}>暂无封面图。</div>
               )}
-              <UploadImage maxCount={1} onChange={(urls) => setCoverUrl(urls[0] || '')} />
+              <UploadImage maxCount={1} onChange={(urls) => setCoverDraft(urls[0] || null)} />
             </Form.Item>
             <Form.Item name="description" label="简介" rules={[{ max: 1000, message: '简介不超过 1000 字' }]}>
               <TextArea rows={4} maxLength={1000} showCount placeholder="店铺简介（可选）" />

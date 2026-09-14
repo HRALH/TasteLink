@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   Avatar,
   Button,
@@ -14,9 +14,11 @@ import {
 } from 'antd'
 import { LikeFilled, LikeOutlined } from '@ant-design/icons'
 import { Link, useParams } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { reviewApi } from '../../api/review'
 import { interactionApi } from '../../api/interaction'
-import type { CommentVO, PageResult, ReviewVO } from '../../types/api'
+import QueryError from '../../components/QueryError'
+import type { ReviewVO } from '../../types/api'
 import { DEFAULT_PAGE, DEFAULT_SIZE } from '../../utils/constants'
 import { useAuthStore } from '../../store/authStore'
 import PullQuote from '../../components/editorial/PullQuote'
@@ -29,91 +31,87 @@ const { TextArea } = Input
 export default function ReviewDetailPage() {
   const { id } = useParams<{ id: string }>()
   const reviewId = Number(id)
+  const reviewIdValid = !Number.isNaN(reviewId) && reviewId > 0
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn)
+  const queryClient = useQueryClient()
 
-  const [review, setReview] = useState<ReviewVO | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [likeLoading, setLikeLoading] = useState(false)
-
-  const [comments, setComments] = useState<PageResult<CommentVO> | null>(null)
   const [commentPage, setCommentPage] = useState(DEFAULT_PAGE)
-  const [commentVersion, setCommentVersion] = useState(0)
-  const [commentLoading, setCommentLoading] = useState(false)
   const [commentText, setCommentText] = useState('')
-  const [submitting, setSubmitting] = useState(false)
   // 点赞心爆重放计数：每次 toggleLike 自增，驱动 icon remount 重播 .tl-heartburst
   const [likeBurst, setLikeBurst] = useState(0)
 
-  // 加载点评详情
-  useEffect(() => {
-    if (!reviewId) return
-    setLoading(true)
-    reviewApi
-      .get(reviewId)
-      .then(setReview)
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [reviewId])
+  const reviewQuery = useQuery({
+    queryKey: ['review', reviewId],
+    queryFn: () => reviewApi.get(reviewId),
+    enabled: reviewIdValid,
+  })
+  const commentsQuery = useQuery({
+    queryKey: ['comments', reviewId, commentPage],
+    queryFn: () => interactionApi.comments(reviewId, { page: commentPage, size: DEFAULT_SIZE }),
+    enabled: reviewIdValid,
+  })
 
-  // 加载评论列表（翻页或提交后刷新）
-  useEffect(() => {
-    if (!reviewId) return
-    setCommentLoading(true)
-    interactionApi
-      .comments(reviewId, { page: commentPage, size: DEFAULT_SIZE })
-      .then(setComments)
-      .catch(() => setComments(null))
-      .finally(() => setCommentLoading(false))
-  }, [reviewId, commentPage, commentVersion])
+  const review = reviewQuery.data
+  const comments = commentsQuery.data
 
-  const toggleLike = async () => {
+  // 点赞：onMutate 快照乐观翻 → onError 回滚 → onSuccess 以服务端 likeCount 为准
+  const likeMutation = useMutation({
+    mutationFn: (liked: boolean) =>
+      liked ? interactionApi.unlike(reviewId) : interactionApi.like(reviewId),
+    onMutate: async (liked) => {
+      await queryClient.cancelQueries({ queryKey: ['review', reviewId] })
+      const prev = queryClient.getQueryData<ReviewVO>(['review', reviewId])
+      queryClient.setQueryData<ReviewVO>(['review', reviewId], (r) =>
+        r ? { ...r, hasLiked: !liked, likeCount: Math.max(0, r.likeCount + (liked ? -1 : 1)) } : r,
+      )
+      setLikeBurst((b) => b + 1)
+      return { prev }
+    },
+    onError: (_e, _liked, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['review', reviewId], ctx.prev)
+    },
+    onSuccess: (res, liked) => {
+      queryClient.setQueryData<ReviewVO>(['review', reviewId], (r) =>
+        r ? { ...r, likeCount: res.likeCount, hasLiked: !liked } : r,
+      )
+    },
+  })
+
+  const commentMutation = useMutation({
+    mutationFn: (text: string) => interactionApi.createComment(reviewId, { content: text }),
+    onSuccess: () => {
+      message.success('评论成功')
+      setCommentText('')
+      queryClient.setQueryData<ReviewVO>(['review', reviewId], (r) =>
+        r ? { ...r, replyCount: r.replyCount + 1 } : r,
+      )
+      setCommentPage(DEFAULT_PAGE)
+      queryClient.invalidateQueries({ queryKey: ['comments', reviewId] })
+    },
+    // 错误提示已由 request 拦截器统一处理
+  })
+
+  const toggleLike = () => {
     if (!review) return
     if (!isLoggedIn) {
       message.warning('请先登录')
       return
     }
-    const liked = review.hasLiked
-    setLikeLoading(true)
-    // 乐观更新
-    setReview({
-      ...review,
-      hasLiked: !liked,
-      likeCount: Math.max(0, review.likeCount + (liked ? -1 : 1)),
-    })
-    setLikeBurst((b) => b + 1)
-    try {
-      const res = liked ? await interactionApi.unlike(reviewId) : await interactionApi.like(reviewId)
-      setReview((r) => (r ? { ...r, likeCount: res.likeCount, hasLiked: !liked } : r))
-    } catch {
-      // 回滚
-      setReview((r) => (r ? { ...r, hasLiked: liked, likeCount: review.likeCount } : r))
-    } finally {
-      setLikeLoading(false)
-    }
+    likeMutation.mutate(review.hasLiked)
   }
 
-  const submitComment = async () => {
+  const submitComment = () => {
     const text = commentText.trim()
     if (!text || !isLoggedIn) {
       if (!isLoggedIn) message.warning('请先登录')
       return
     }
-    setSubmitting(true)
-    try {
-      await interactionApi.createComment(reviewId, { content: text })
-      message.success('评论成功')
-      setCommentText('')
-      if (review) setReview({ ...review, replyCount: review.replyCount + 1 })
-      setCommentPage(DEFAULT_PAGE)
-      setCommentVersion((v) => v + 1)
-    } catch {
-      // 错误提示已由 request 拦截器统一处理
-    } finally {
-      setSubmitting(false)
-    }
+    commentMutation.mutate(text)
   }
 
-  if (loading) return <Skeleton active />
+  if (!reviewIdValid) return <Empty description="点评不存在" />
+  if (reviewQuery.isPending) return <Skeleton active />
+  if (reviewQuery.isError) return <QueryError onRetry={() => reviewQuery.refetch()} />
   if (!review) return <Empty description="点评不存在" />
 
   return (
@@ -177,7 +175,7 @@ export default function ReviewDetailPage() {
                 {review.hasLiked ? <LikeFilled /> : <LikeOutlined />}
               </span>
             }
-            loading={likeLoading}
+            loading={likeMutation.isPending}
             onClick={toggleLike}
             className="tl-press"
           >
@@ -208,7 +206,7 @@ export default function ReviewDetailPage() {
             type="primary"
             shape="round"
             style={{ marginTop: 8 }}
-            loading={submitting}
+            loading={commentMutation.isPending}
             disabled={!isLoggedIn || !commentText.trim()}
             onClick={submitComment}
             className="tl-press"
@@ -217,8 +215,10 @@ export default function ReviewDetailPage() {
           </Button>
         </div>
 
-        {commentLoading ? (
+        {commentsQuery.isPending ? (
           <Skeleton active />
+        ) : commentsQuery.isError ? (
+          <QueryError onRetry={() => commentsQuery.refetch()} />
         ) : !comments?.records?.length ? (
           <Empty description="暂无评论" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         ) : (

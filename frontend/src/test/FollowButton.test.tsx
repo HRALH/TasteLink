@@ -6,7 +6,7 @@ import { Link, Route, Routes } from 'react-router-dom'
 import FollowButton from '../components/FollowButton'
 import UserHomePage from '../pages/user/UserHomePage'
 import { server } from './server'
-import { Providers } from './render'
+import { Providers, QueryShell } from './render'
 
 /** UserVO 最小构造 */
 const userVO = (id: number, hasFollowed: boolean) => ({
@@ -26,13 +26,25 @@ const ok = (data: unknown) => HttpResponse.json({ code: 0, message: 'success', d
 describe('FollowButton 跨用户状态（F1-1 回归）', () => {
   it('组件级契约：useState 只初始化一次，调用方必须以 key={userId} 切用户重置', () => {
     // 无 key：同一实例换 userId/hasFollowed，内部态残留（这正是 F1-1 的根因）
-    const { rerender } = render(<FollowButton userId={1} hasFollowed />)
+    const { rerender } = render(
+      <QueryShell>
+        <FollowButton userId={1} hasFollowed />
+      </QueryShell>,
+    )
     expect(screen.getByRole('button', { name: '已关注' })).toBeInTheDocument()
-    rerender(<FollowButton userId={2} hasFollowed={false} />)
+    rerender(
+      <QueryShell>
+        <FollowButton userId={2} hasFollowed={false} />
+      </QueryShell>,
+    )
     expect(screen.getByRole('button', { name: '已关注' })).toBeInTheDocument()
 
     // 有 key（UserHomePage/UserCard 的用法）：key 变化 remount，态重置为新用户
-    rerender(<FollowButton key={2} userId={2} hasFollowed={false} />)
+    rerender(
+      <QueryShell>
+        <FollowButton key={2} userId={2} hasFollowed={false} />
+      </QueryShell>,
+    )
     expect(screen.getByRole('button', { name: '关注' })).toBeInTheDocument()
   })
 
