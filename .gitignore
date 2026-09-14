@@ -44,3 +44,6 @@ frontend/.env.*
 *.sql.bak
 *.dump
 *.dump.gz
+
+# Claude Code worktrees / session metadata
+.claude/
