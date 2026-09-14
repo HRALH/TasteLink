@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, expect, it, beforeEach, vi } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { Link, Route, Routes } from 'react-router-dom'
@@ -7,6 +7,23 @@ import FollowButton from '../components/FollowButton'
 import UserHomePage from '../pages/user/UserHomePage'
 import { server } from './server'
 import { Providers, QueryShell } from './render'
+import { useAuthStore } from '../store/authStore'
+
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>()
+  return {
+    ...actual,
+    message: {
+      error: vi.fn(),
+      success: vi.fn(),
+      info: vi.fn(),
+      warning: vi.fn(),
+      loading: vi.fn(),
+    },
+  }
+})
+
+import { message } from 'antd'
 
 /** UserVO 最小构造 */
 const userVO = (id: number, hasFollowed: boolean) => ({
@@ -23,7 +40,12 @@ const userVO = (id: number, hasFollowed: boolean) => ({
 const emptyPage = { records: [], total: 0, current: 1, size: 10, pages: 0 }
 const ok = (data: unknown) => HttpResponse.json({ code: 0, message: 'success', data })
 
-describe('FollowButton 跨用户状态（F1-1 回归）', () => {
+beforeEach(() => {
+  useAuthStore.setState({ token: 't', userInfo: null, role: 'USER', isLoggedIn: true })
+  vi.clearAllMocks()
+})
+
+describe('FollowButton key 契约与乐观更新回滚（F1-1 / F6）', () => {
   it('组件级契约：useState 只初始化一次，调用方必须以 key={userId} 切用户重置', () => {
     // 无 key：同一实例换 userId/hasFollowed，内部态残留（这正是 F1-1 的根因）
     const { rerender } = render(
@@ -48,6 +70,29 @@ describe('FollowButton 跨用户状态（F1-1 回归）', () => {
     expect(screen.getByRole('button', { name: '关注' })).toBeInTheDocument()
   })
 
+  it('关注翻转失败回滚态（乐观更新 onMutate 翻 → onError 回滚）', async () => {
+    server.use(
+      // follow API 返回 500（拦截器会 toast + reject）
+      http.post('/api/v1/users/2/follow', () =>
+        HttpResponse.json({ code: 500, message: '服务器异常' }),
+      ),
+    )
+    const user = userEvent.setup()
+    render(
+      <QueryShell>
+        <FollowButton userId={2} hasFollowed={false} />
+      </QueryShell>,
+    )
+
+    const btn = screen.getByRole('button', { name: '关注' })
+    await user.click(btn)
+    // 乐观瞬时翻「已关注」→ 失败回滚「关注」
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '关注' })).toBeInTheDocument()
+    })
+    expect(message.error).toHaveBeenCalled()
+  })
+
   it('页面级：从 /users/1 导航到 /users/2，按钮关注态跟随新用户而非残留', async () => {
     server.use(
       http.get('/api/v1/users/:id', ({ params }) =>
@@ -63,15 +108,26 @@ describe('FollowButton 跨用户状态（F1-1 回归）', () => {
         </Routes>
       </Providers>,
     )
-
-    // u1：hasFollowed=true → 已关注
     await screen.findByRole('button', { name: '已关注' })
-
-    // 同路由组件实例导航到 u2（hasFollowed=false）。
-    // 注：UserHomePage 拉取期间的全页骨架会卸载按钮，视觉残留窗口极短；
-    // 此用例锁定期望行为，组件级契约测试（上）才钉住 key 的必要性。
     await userEvent.click(screen.getByText('go-u2'))
     await screen.findByRole('button', { name: '关注', exact: true })
     expect(screen.queryByRole('button', { name: '已关注' })).not.toBeInTheDocument()
+  })
+
+  it('未登录点击 → message.warning 提示，不调 API', async () => {
+    useAuthStore.setState({ token: null, role: null, isLoggedIn: false, userInfo: null })
+    server.use(
+      http.post('/api/v1/users/2/follow', () => {
+        throw new Error('should not be called')
+      }),
+    )
+    const user = userEvent.setup()
+    render(
+      <QueryShell>
+        <FollowButton userId={2} hasFollowed={false} />
+      </QueryShell>,
+    )
+    await user.click(screen.getByRole('button', { name: '关注' }))
+    expect(message.warning).toHaveBeenCalledWith('请先登录')
   })
 })
