@@ -151,12 +151,16 @@ public class ReviewServiceImpl implements ReviewService {
             }
         }
 
-        // 店铺计数：点评数 +1、评分汇总累加、平均评分重算（单条 UPDATE 内顺序求值）
+        // 店铺计数（B2-3）：拆两条 UPDATE——count/sum 相对自增（并发安全、同行锁串行化），
+        // avg 再由本连接可见的最新 count/sum 显式重算；不再依赖 MySQL SET 从左到右求值（非标准语义）。
+        // rating 走 {0} 参数绑定（虽经 @Min/@Max 校验为 int，不拼字面值）
         int r = req.getRating();
         shopMapper.update(null, new LambdaUpdateWrapper<Shop>()
                 .eq(Shop::getId, shopId)
-                .setSql("review_count = review_count + 1, rating_sum = rating_sum + " + r
-                        + ", avg_rating = ROUND(rating_sum / review_count, 2)"));
+                .setSql("review_count = review_count + 1, rating_sum = rating_sum + {0}", r));
+        shopMapper.update(null, new LambdaUpdateWrapper<Shop>()
+                .eq(Shop::getId, shopId)
+                .setSql("avg_rating = ROUND(rating_sum / review_count, 2)"));
 
         // 用户点评数 +1
         userMapper.update(null, new LambdaUpdateWrapper<User>()
