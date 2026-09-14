@@ -63,7 +63,11 @@ CREATE TABLE IF NOT EXISTS `t_shop` (
   PRIMARY KEY (`id`),
   KEY `idx_city_status_review`      (`city`, `status`, `review_count`),
   KEY `idx_category_status_review`  (`category_id`, `status`, `review_count`),
-  KEY `idx_name`                     (`name`)
+  KEY `idx_name`                     (`name`),
+  -- B3-1: 首页/全局热榜 WHERE status=1 ORDER BY review_count DESC, like_count DESC（无 city 前缀时用）
+  KEY `idx_status_review_like`      (`status`, `review_count` DESC, `like_count` DESC),
+  -- B3-1: 删店对账扫描 WHERE status=0 AND update_time<?（ScheduledShopCleanupReconcile）
+  KEY `idx_status_update`           (`status`, `update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='店铺表';
 
 -- 3.4 点评表
@@ -83,7 +87,9 @@ CREATE TABLE IF NOT EXISTS `t_review` (
   KEY `idx_shop_status_create` (`shop_id`, `status`, `create_time`),
   KEY `idx_user_status_create` (`user_id`, `status`, `create_time`),
   KEY `idx_status_like`        (`status`, `like_count`),
-  KEY `idx_city_like`          (`city`, `status`, `like_count`)
+  KEY `idx_city_like`          (`city`, `status`, `like_count`),
+  -- B3-1: 店铺点评按热度排序 WHERE shop_id=? AND status=1 ORDER BY like_count DESC（ReviewServiceImpl sortBy=like）
+  KEY `idx_shop_status_like`   (`shop_id`, `status`, `like_count` DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='点评表';
 
 -- 3.5 点评图片表
