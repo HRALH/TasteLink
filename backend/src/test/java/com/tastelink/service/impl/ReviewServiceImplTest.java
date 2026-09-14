@@ -162,4 +162,37 @@ class ReviewServiceImplTest {
 
         verify(reviewImageMapper, never()).insertBatch(anyList());
     }
+
+    @Test
+    void createReview_updatesShopCountersInTwoStatements() {
+        // B2-3：count/sum 相对自增 → avg 显式重算；不依赖 MySQL SET 左到右求值
+        Shop s = shop();
+        when(shopMapper.selectOne(any())).thenReturn(s);
+        when(reviewMapper.insert(any(Review.class))).thenAnswer(inv -> {
+            ((Review) inv.getArgument(0)).setId(100L);
+            return 1;
+        });
+        when(reviewImageMapper.selectList(any())).thenReturn(List.of());
+        when(shopMapper.selectBatchIds(any())).thenReturn(List.of(s));
+        when(userMapper.selectBatchIds(any())).thenReturn(List.of(new User()));
+        when(reviewLikeMapper.selectList(any())).thenReturn(List.of());
+
+        service.createReview(1L, req(null), 7L);
+
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Shop>> captor =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper.class);
+        verify(shopMapper, org.mockito.Mockito.times(2))
+                .update(org.mockito.ArgumentMatchers.isNull(), captor.capture());
+        List<String> sqlSets = captor.getAllValues().stream()
+                .map(com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper::getSqlSet)
+                .toList();
+        assertEquals(2, sqlSets.size());
+        // 第一条：count/sum 相对自增；rating 走参数绑定（{0} 已被 MP 展开为参数占位）
+        org.junit.jupiter.api.Assertions.assertTrue(sqlSets.get(0).contains("review_count = review_count + 1"));
+        org.junit.jupiter.api.Assertions.assertTrue(sqlSets.get(0).contains("rating_sum = rating_sum +"));
+        org.junit.jupiter.api.Assertions.assertFalse(sqlSets.get(0).contains("avg_rating"),
+                "avg 不得在第一条依赖顺序求值");
+        // 第二条：avg 由最新 count/sum 显式重算
+        assertEquals("avg_rating = ROUND(rating_sum / review_count, 2)", sqlSets.get(1));
+    }
 }
