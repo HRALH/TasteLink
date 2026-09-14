@@ -111,16 +111,30 @@ public class AdminShopServiceImpl implements AdminShopService {
                 .eq(Review::getShopId, shopId)
                 .eq(Review::getStatus, Constants.STATUS_NORMAL));
         if (!reviews.isEmpty()) {
+            // setSql 直写（不依赖 lambda .set 的 TableInfo 缓存，纯单测可覆盖；status 为代码常量无注入风险）
             reviewMapper.update(null, new LambdaUpdateWrapper<Review>()
                     .eq(Review::getShopId, shopId)
                     .eq(Review::getStatus, Constants.STATUS_NORMAL)
-                    .set(Review::getStatus, Constants.STATUS_HIDDEN));
+                    .setSql("status = " + Constants.STATUS_HIDDEN));
+            // 2.5）B2-2：对称回扣店铺 review_count/rating_sum 并重算 avg_rating（镜像 createReview 的累加，
+            // GREATEST 0 防负；avg 显式重算同 B2-3）——否则店铺恢复（status 回 1）后评分/点评数永久虚高
+            int cnt = reviews.size();
+            int ratingSum = reviews.stream()
+                    .mapToInt(rv -> rv.getRating() == null ? 0 : rv.getRating())
+                    .sum();
+            shopMapper.update(null, new LambdaUpdateWrapper<Shop>()
+                    .eq(Shop::getId, shopId)
+                    .setSql("review_count = GREATEST(0, review_count - " + cnt
+                            + "), rating_sum = GREATEST(0, rating_sum - " + ratingSum + ")"));
+            shopMapper.update(null, new LambdaUpdateWrapper<Shop>()
+                    .eq(Shop::getId, shopId)
+                    .setSql("avg_rating = IF(review_count = 0, 0.00, ROUND(rating_sum / review_count, 2))"));
             // 3）对称回扣发布用户 review_count（镜像 createReview 的 +1，按用户聚合累减，GREATEST 0 防负）
             Map<Long, Long> perUser = reviews.stream()
                     .collect(Collectors.groupingBy(Review::getUserId, Collectors.counting()));
-            perUser.forEach((uid, cnt) -> userMapper.update(null, new LambdaUpdateWrapper<User>()
+            perUser.forEach((uid, c) -> userMapper.update(null, new LambdaUpdateWrapper<User>()
                     .eq(User::getId, uid)
-                    .setSql("review_count = GREATEST(0, review_count - " + cnt + ")")));
+                    .setSql("review_count = GREATEST(0, review_count - " + c + ")")));
         }
         // 4）物删清理走延时 MQ 消费者；于此事务提交后投递，DB 回滚则不发
         afterCommit(() -> shopCleanupProducer.send(shopId));
