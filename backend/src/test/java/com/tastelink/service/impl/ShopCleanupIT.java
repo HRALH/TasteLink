@@ -190,7 +190,7 @@ class ShopCleanupIT {
                 assertNull(shopMapper.selectById(shopId)));
 
         // 待消费者处理完，再投一条重复消息（经延时队列再投递）：幂等 no-op，不应抛错或复活数据
-        ShopCleanupMessage dup = new ShopCleanupMessage(shopId, System.currentTimeMillis(), 1);
+        ShopCleanupMessage dup = new ShopCleanupMessage(shopId, System.currentTimeMillis());
         rabbitTemplate.convertAndSend(RabbitMQConfig.SUBMIT_EXCHANGE, RabbitMQConfig.ROUTING_KEY, dup);
         await().atMost(java.time.Duration.ofSeconds(10)).untilAsserted(() ->
                 assertNull(shopMapper.selectById(shopId)));

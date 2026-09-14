@@ -12,10 +12,11 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
+import java.util.UUID;
 
 /**
  * JWT 签发与解析（jjwt 0.12.x）。
- * Claims: subject=username, 自定义 userId / role（v2 Phase B 起带 role，鉴权依此 hasRole）。
+ * Claims: jti=UUID（B1-3 吊销黑名单用）, subject=username, 自定义 userId / role（v2 Phase B 起带 role，鉴权依此 hasRole）。
  */
 @Component
 @RequiredArgsConstructor
@@ -33,6 +34,7 @@ public class JwtUtil {
         Instant now = Instant.now();
         Instant exp = now.plusSeconds(jwtConfig.getExpireSeconds());
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(username)
                 .claim("userId", Long.toString(userId))
                 .claim("role", role)

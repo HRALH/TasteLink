@@ -29,7 +29,7 @@ public class ShopCleanupConsumer {
             log.warn("shop cleanup message ignored: invalid payload {}", message);
             return;
         }
-        log.info("shop cleanup message received: shopId={}, retry={}", message.getShopId(), message.getRetry());
+        log.info("shop cleanup message received: shopId={}", message.getShopId());
         // 抛异常触发 retry→DLQ；正常路径幂等清理
         shopCleanupService.cleanup(message.getShopId());
     }

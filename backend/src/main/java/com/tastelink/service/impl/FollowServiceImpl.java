@@ -23,6 +23,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -102,7 +105,14 @@ public class FollowServiceImpl implements FollowService {
     }
 
     private List<UserVO> toUserVOs(List<Long> userIds) {
-        List<User> users = userIds.isEmpty() ? List.of() : userMapper.selectBatchIds(userIds);
-        return userService.toUserVOs(users, SecurityContextHelper.getCurrentUserId());
+        if (userIds.isEmpty()) {
+            return List.of();
+        }
+        // B2-1：selectBatchIds 返回序不稳定（IN 查询按主键序），按入参 id 序（关注时间倒序）重排，
+        // 与热榜 reorder / ShopServiceImpl.toVOsByIds 同手法；缺失的 id 跳过
+        Map<Long, User> byId = userMapper.selectBatchIds(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+        List<User> ordered = userIds.stream().map(byId::get).filter(Objects::nonNull).toList();
+        return userService.toUserVOs(ordered, SecurityContextHelper.getCurrentUserId());
     }
 }

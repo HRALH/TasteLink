@@ -24,6 +24,7 @@ import com.tastelink.service.HotRankService;
 import com.tastelink.service.InteractionService;
 import com.tastelink.utils.DateUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +36,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class InteractionServiceImpl implements InteractionService {
 
@@ -65,6 +67,10 @@ public class InteractionServiceImpl implements InteractionService {
             afterCommit(() -> hotRankService.onLike(reviewId));
         } catch (DuplicateKeyException dup) {
             // 已点赞：幂等返回当前计数，不报错（缓存亦不动）
+            // 前提（B2-5）：本方法必须运行在非嵌套的物理事务中——依赖 MySQL/InnoDB 的
+            // statement-level 回滚语义，唯一键冲突仅回滚失败语句、事务仍可继续提交；
+            // 若改为 PROPAGATION_NESTED（savepoint 语义）或 catch 后继续写库需重新评估。
+            log.debug("duplicate like ignored (idempotent): reviewId={}, userId={}", reviewId, userId);
         }
         Integer count = reviewMapper.selectById(reviewId).getLikeCount();
         return new LikeCountVO(count);

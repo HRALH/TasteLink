@@ -9,6 +9,7 @@ import com.tastelink.exception.BusinessException;
 import com.tastelink.service.FileStorageService;
 import com.tastelink.utils.UploadUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -23,6 +24,7 @@ import java.util.UUID;
  * 阿里云 OSS 存储实现（storage.type=oss）。
  * URL 由 domain 或 https://{bucket}.{endpoint}/{objectKey} 拼装。
  */
+@Slf4j
 @Service
 @ConditionalOnProperty(prefix = "tastelink.storage", name = "type", havingValue = "oss")
 @RequiredArgsConstructor
@@ -61,8 +63,9 @@ public class OssFileStorageServiceImpl implements FileStorageService {
         }
         try {
             ossClient.deleteObject(props.getOss().getBucket(), ossKey);
-        } catch (Exception ignored) {
-            // 删除失败不影响主流程
+        } catch (Exception e) {
+            // 删除失败不影响主流程（删店对账会重清），但需留痕
+            log.warn("oss delete failed: key={}, err={}", ossKey, e.getMessage());
         }
     }
 

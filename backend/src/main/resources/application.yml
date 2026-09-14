@@ -25,8 +25,12 @@ spring:
     password: ${DB_PASSWORD:}
     hikari:
       maximum-pool-size: 10
-      minimum-idle: 2
+      # B4-5：minimum-idle 提至与 max 同量级，避免突发流量时从 2 条起步建连的毛刺
+      minimum-idle: 10
       connection-timeout: 20000
+      # B4-5：local 下开启泄露检测，连接被借出超 30s 未归还即记 warn 便于定位长事务/IO 泄漏
+      # 部署环境按需经 LEAK_DETECTION_THRESHOLD 关闭或调高（0=关闭）
+      leak-detection-threshold: ${LEAK_DETECTION_THRESHOLD:30000}
   # Redis（v2 Phase A 点评审热度排行缓存；Lettuce 懒连接，未起 Redis 不影响启动）
   data:
     redis:
@@ -71,13 +75,33 @@ spring:
   sql:
     init:
       mode: never
+  # B4-3 调度加固：scheduling 线程池提至 3，让 rank-rebuild / shop-cleanup-reconcile /
+  # shop-index-reconcile 三个 @Scheduled 不再单线程串行（避免长任务阻塞其他 cron）
+  task:
+    scheduling:
+      pool:
+        size: 3
+
+# B4-1 actuator：仅暴露 health（permitAll）与 metrics（ADMIN），其余端点关闭
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
+  endpoint:
+    health:
+      show-details: never   # 不向前端泄露组件详情（DB/Redis/MQ 状态）
+
+# B4-2 traceId：日志 pattern 加 [%X{traceId}]，由 TraceIdFilter 注入 MDC
+logging:
+  pattern:
+    level: "%5p [%X{traceId:-}]"
 
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
     default-fetch-size: 100
     default-statement-timeout: 30
-  mapper-locations: classpath*:mapper/*.xml
   global-config:
     banner: false
     db-config:
@@ -112,7 +136,8 @@ tastelink:
   rank:
     # 缓存总开关；关闭后读写均回退 MySQL，便于灰度/回滚
     cache-enabled: ${RANK_CACHE_ENABLED:true}
-    # 全局热度 ZSet 的 key（v2 Phase A 仅缓存全局；按城市筛选仍走 MySQL）
+    # 全局热度 ZSet 的 key 后缀（B4-4：完整 key = tastelink:{profile}:review:hot，
+    # 由 HotRankServiceImpl 经 RedisKeyNamespace 加环境前缀，防多环境共用 Redis 串数据）
     zset-key: ${RANK_ZSET_KEY:review:hot}
     # 定时对账：以 MySQL 为准重建全局 ZSet（修复漂移 + 冷启动空缓存）
     rebuild-cron: ${RANK_REBUILD_CRON:0 */10 * * * *}

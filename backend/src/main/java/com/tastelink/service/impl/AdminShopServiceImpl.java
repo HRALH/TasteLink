@@ -16,6 +16,7 @@ import com.tastelink.mapper.ShopCategoryMapper;
 import com.tastelink.mapper.ShopMapper;
 import com.tastelink.mapper.UserMapper;
 import com.tastelink.service.AdminShopService;
+import com.tastelink.service.HotRankService;
 import com.tastelink.service.ShopCleanupProducer;
 import com.tastelink.service.ShopService;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +49,7 @@ public class AdminShopServiceImpl implements AdminShopService {
     private final UserMapper userMapper;
     private final ShopService shopService;
     private final ShopCleanupProducer shopCleanupProducer;
+    private final HotRankService hotRankService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -111,17 +113,36 @@ public class AdminShopServiceImpl implements AdminShopService {
                 .eq(Review::getShopId, shopId)
                 .eq(Review::getStatus, Constants.STATUS_NORMAL));
         if (!reviews.isEmpty()) {
+            // setSql 直写（不依赖 lambda .set 的 TableInfo 缓存，纯单测可覆盖；status 为代码常量无注入风险）
             reviewMapper.update(null, new LambdaUpdateWrapper<Review>()
                     .eq(Review::getShopId, shopId)
                     .eq(Review::getStatus, Constants.STATUS_NORMAL)
-                    .set(Review::getStatus, Constants.STATUS_HIDDEN));
+                    .setSql("status = " + Constants.STATUS_HIDDEN));
+            // 2.5）B2-2：对称回扣店铺 review_count/rating_sum 并重算 avg_rating（镜像 createReview 的累加，
+            // GREATEST 0 防负；avg 显式重算同 B2-3）——否则店铺恢复（status 回 1）后评分/点评数永久虚高
+            int cnt = reviews.size();
+            int ratingSum = reviews.stream()
+                    .mapToInt(rv -> rv.getRating() == null ? 0 : rv.getRating())
+                    .sum();
+            shopMapper.update(null, new LambdaUpdateWrapper<Shop>()
+                    .eq(Shop::getId, shopId)
+                    .setSql("review_count = GREATEST(0, review_count - " + cnt
+                            + "), rating_sum = GREATEST(0, rating_sum - " + ratingSum + ")"));
+            shopMapper.update(null, new LambdaUpdateWrapper<Shop>()
+                    .eq(Shop::getId, shopId)
+                    .setSql("avg_rating = IF(review_count = 0, 0.00, ROUND(rating_sum / review_count, 2))"));
             // 3）对称回扣发布用户 review_count（镜像 createReview 的 +1，按用户聚合累减，GREATEST 0 防负）
             Map<Long, Long> perUser = reviews.stream()
                     .collect(Collectors.groupingBy(Review::getUserId, Collectors.counting()));
-            perUser.forEach((uid, cnt) -> userMapper.update(null, new LambdaUpdateWrapper<User>()
+            perUser.forEach((uid, c) -> userMapper.update(null, new LambdaUpdateWrapper<User>()
                     .eq(User::getId, uid)
-                    .setSql("review_count = GREATEST(0, review_count - " + cnt + ")")));
+                    .setSql("review_count = GREATEST(0, review_count - " + c + ")")));
         }
+        // 3.5）B3-3：标记下架即对被隐藏点评从热度 ZSet 摘除（zrem），不等物理删阶段——
+        // 否则 rebuild 窗口期首页热榜仍带这些已隐藏 reviewId，ReviewServiceImpl:166-171 过滤死成员后条数不足。
+        // zrem 走 afterCommit（Redis IO 不进 DB 事务；HotRankService.onDelete 内部吞异常 + rebuild 兜底）
+        List<Long> hiddenReviewIds = reviews.stream().map(Review::getId).toList();
+        afterCommit(() -> hiddenReviewIds.forEach(hotRankService::onDelete));
         // 4）物删清理走延时 MQ 消费者；于此事务提交后投递，DB 回滚则不发
         afterCommit(() -> shopCleanupProducer.send(shopId));
     }

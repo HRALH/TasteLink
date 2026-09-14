@@ -6,11 +6,13 @@ import com.tastelink.dto.request.UpdateShopRequest;
 import com.tastelink.dto.response.ShopDetailVO;
 import com.tastelink.entity.Shop;
 import com.tastelink.entity.ShopCategory;
+import com.tastelink.entity.User;
 import com.tastelink.exception.BusinessException;
 import com.tastelink.mapper.ReviewMapper;
 import com.tastelink.mapper.ShopCategoryMapper;
 import com.tastelink.mapper.ShopMapper;
 import com.tastelink.mapper.UserMapper;
+import com.tastelink.service.HotRankService;
 import com.tastelink.service.ShopCleanupProducer;
 import com.tastelink.service.ShopService;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,13 +52,15 @@ class AdminShopServiceImplTest {
     private ShopService shopService;
     @Mock
     private ShopCleanupProducer shopCleanupProducer;
+    @Mock
+    private HotRankService hotRankService;
 
     private AdminShopServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new AdminShopServiceImpl(shopMapper, categoryMapper, reviewMapper, userMapper,
-                shopService, shopCleanupProducer);
+                shopService, shopCleanupProducer, hotRankService);
     }
 
     private Shop shop(long id) {
@@ -147,10 +151,64 @@ class AdminShopServiceImplTest {
     }
 
     // ---------- Phase C 删店标记事务 ----------
-    // 标记事务中的级联隐藏点评走 LambdaUpdateWrapper.set，依赖 MyBatis-Plus 的 TableInfo 缓存，
-    // 纯 Mockito 无 Spring 上下文时该方法会抛 lambda-cache 错（与 InteractionServiceImpl 一样，
-    // 仓库内该类 lambda-update 服务本就不做 Mockito 覆盖）——故 success 级联+回扣留给
-    // ShopCleanupIT 真 DB 上下文覆盖。下列用例只触 lambda-free 路径，可在 mvn test 跑。
+    // 级联隐藏/回扣均走 setSql 直写（B2-2 起不再用 lambda .set——其依赖 TableInfo 缓存，
+    // 纯 Mockito 会抛 lambda-cache 错），故删店全路径可在无 Spring 上下文下覆盖。
+
+    @Test
+    void deleteShop_withReviews_hidesAndReclaimsShopAndUserCounters() {
+        // B2-2：级联隐藏 + 店铺 review_count/rating_sum 回扣 + avg_rating 重算 + 用户计数回扣
+        Shop s = shop(1L);
+        when(shopMapper.selectById(1L)).thenReturn(s);
+        when(shopMapper.updateById(any(Shop.class))).thenReturn(1);
+        com.tastelink.entity.Review r1 = review(10L, 7L, 5);
+        com.tastelink.entity.Review r2 = review(20L, 7L, 3);
+        com.tastelink.entity.Review r3 = review(30L, 8L, 4);
+        when(reviewMapper.selectList(any())).thenReturn(List.of(r1, r2, r3));
+
+        service.deleteShop(1L);
+
+        // 级联隐藏
+        org.mockito.ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<com.tastelink.entity.Review>>
+                reviewCap = org.mockito.ArgumentCaptor.forClass(
+                        (Class) com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper.class);
+        verify(reviewMapper).update(org.mockito.ArgumentMatchers.isNull(), reviewCap.capture());
+        assertEquals("status = " + Constants.STATUS_HIDDEN, reviewCap.getValue().getSqlSet());
+
+        // 店铺计数：cnt=3，ratingSum=5+3+4=12；再显式重算 avg
+        org.mockito.ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Shop>>
+                shopCap = org.mockito.ArgumentCaptor.forClass(
+                        (Class) com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper.class);
+        verify(shopMapper, org.mockito.Mockito.times(2))
+                .update(org.mockito.ArgumentMatchers.isNull(), shopCap.capture());
+        List<String> shopSqls = shopCap.getAllValues().stream()
+                .map(com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper::getSqlSet).toList();
+        assertEquals("review_count = GREATEST(0, review_count - 3), rating_sum = GREATEST(0, rating_sum - 12)",
+                shopSqls.get(0));
+        assertEquals("avg_rating = IF(review_count = 0, 0.00, ROUND(rating_sum / review_count, 2))",
+                shopSqls.get(1));
+
+        // 用户计数：uid=7 被隐藏 2 条、uid=8 被隐藏 1 条（聚合顺序不定，按集合断言）
+        org.mockito.ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<User>>
+                userCap = org.mockito.ArgumentCaptor.forClass(
+                        (Class) com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper.class);
+        verify(userMapper, org.mockito.Mockito.times(2))
+                .update(org.mockito.ArgumentMatchers.isNull(), userCap.capture());
+        java.util.Set<String> userSqls = userCap.getAllValues().stream()
+                .map(com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper::getSqlSet)
+                .collect(java.util.stream.Collectors.toSet());
+        assertEquals(java.util.Set.of("review_count = GREATEST(0, review_count - 2)",
+                "review_count = GREATEST(0, review_count - 1)"), userSqls);
+
+        verify(shopCleanupProducer).send(1L);
+    }
+
+    private com.tastelink.entity.Review review(long id, long userId, int rating) {
+        com.tastelink.entity.Review r = new com.tastelink.entity.Review();
+        r.setId(id);
+        r.setUserId(userId);
+        r.setRating(rating);
+        return r;
+    }
 
     @Test
     void deleteShop_noReviews_marksHideSkipsCascadeAndPublishes() {
@@ -163,6 +221,7 @@ class AdminShopServiceImplTest {
 
         verify(reviewMapper, never()).update(any(), any());
         verify(userMapper, never()).update(any(), any());
+        verify(shopMapper, never()).update(any(), any());
         verify(shopCleanupProducer).send(1L);
     }
 

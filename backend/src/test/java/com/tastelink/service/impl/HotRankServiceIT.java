@@ -51,9 +51,13 @@ class HotRankServiceIT {
         r.setReplyCount(1);
         when(reviewMapper.selectList(any())).thenReturn(List.of(r));
 
-        HotRankServiceImpl svc = new HotRankServiceImpl(template, reviewMapper);
+        // B4-4：环境命名空间 mock——key 直接返回后缀（IT 内不走环境前缀，保持 key 唯一即可）
+        com.tastelink.config.RedisKeyNamespace namespace = mock(com.tastelink.config.RedisKeyNamespace.class);
+        when(namespace.key(org.mockito.ArgumentMatchers.anyString())).thenAnswer(inv -> inv.getArgument(0));
+
+        HotRankServiceImpl svc = new HotRankServiceImpl(template, reviewMapper, namespace);
         ReflectionTestUtils.setField(svc, "cacheEnabled", true);
-        ReflectionTestUtils.setField(svc, "key", key);
+        ReflectionTestUtils.setField(svc, "zsetSuffix", key);
         return svc;
     }
 

@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  push:
+    branches: [main, feature/**]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: backend (mvn test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      # 纯 Mockito 单测，不依赖 DB/Redis/MQ；IT（-DRUN_IT=true）需 Docker，
+      # GitHub runner 有 Docker 但为控 CI 时长默认不跑，按需另起 job 调起
+      - name: mvn test
+        run: mvn -B -ntp test
+
+  frontend:
+    name: frontend (lint + test:run + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # 另一分支（feature/frontend-optimization）已加 @tanstack/react-query 与
+      # rollup-plugin-visualizer；本仓库 package-lock 已含，npm ci 即可
+      - name: npm ci
+        run: npm ci
+      - name: lint
+        run: npm run lint
+      - name: test:run
+        run: npm run test:run
+      - name: build
+        run: npm run build

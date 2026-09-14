@@ -3,6 +3,7 @@ package com.tastelink.config;
 import com.tastelink.service.HotRankService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -23,6 +24,8 @@ public class ScheduledRankRebuild {
 
     /** 默认每 10 分钟一次；cron 由 tastelink.rank.rebuild-cron 配置。 */
     @Scheduled(cron = "${tastelink.rank.rebuild-cron:0 */10 * * * *}")
+    @SchedulerLock(name = "rank-rebuild", lockAtMostFor = "${tastelink.shedlock.rank-rebuild:PT4M}",
+            lockAtLeastFor = "PT10S")
     public void rebuild() {
         hotRankService.rebuild(rebuildTopSize);
     }

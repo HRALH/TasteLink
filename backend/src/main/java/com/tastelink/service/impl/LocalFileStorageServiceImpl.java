@@ -7,6 +7,7 @@ import com.tastelink.exception.BusinessException;
 import com.tastelink.service.FileStorageService;
 import com.tastelink.utils.UploadUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -24,6 +25,7 @@ import java.util.UUID;
  * 本地文件存储实现（storage.type=local 或缺省）。
  * 落地 ./data/uploads/yyyy/MM/uuid.ext，WebMvcConfig 映射为 /static/uploads/** 静态资源。
  */
+@Slf4j
 @Service
 @ConditionalOnProperty(prefix = "tastelink.storage", name = "type", havingValue = "local", matchIfMissing = true)
 @RequiredArgsConstructor
@@ -59,11 +61,18 @@ public class LocalFileStorageServiceImpl implements FileStorageService {
         if (!StringUtils.hasText(ossKey)) {
             return;
         }
+        // 路径穿越防御（B1-1）：resolve 后 normalize，越出 base 目录的 key 一律拒绝
+        Path base = Paths.get(props.getLocal().getBasePath()).toAbsolutePath().normalize();
+        Path path = base.resolve(ossKey).normalize();
+        if (!path.startsWith(base)) {
+            log.warn("storage delete rejected, key escapes base dir: key={}", ossKey);
+            return;
+        }
         try {
-            Path path = Paths.get(props.getLocal().getBasePath()).toAbsolutePath().resolve(ossKey);
             Files.deleteIfExists(path);
-        } catch (IOException ignored) {
-            // 删除失败不影响主流程
+        } catch (IOException e) {
+            // 删除失败不影响主流程（删店对账会重清），但需留痕
+            log.warn("storage delete failed: key={}, err={}", ossKey, e.getMessage());
         }
     }
 

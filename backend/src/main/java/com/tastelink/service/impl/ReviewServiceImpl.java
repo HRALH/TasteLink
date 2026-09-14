@@ -21,6 +21,7 @@ import com.tastelink.mapper.ReviewMapper;
 import com.tastelink.mapper.ShopMapper;
 import com.tastelink.mapper.UserMapper;
 import com.tastelink.security.SecurityContextHelper;
+import com.tastelink.service.FileStorageService;
 import com.tastelink.service.HotRankService;
 import com.tastelink.service.ReviewService;
 import com.tastelink.utils.DateUtil;
@@ -46,6 +47,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final ShopMapper shopMapper;
     private final UserMapper userMapper;
     private final HotRankService hotRankService;
+    private final FileStorageService fileStorageService;
 
     @Override
     public ReviewVO getDetail(Long reviewId) {
@@ -108,6 +110,15 @@ public class ReviewServiceImpl implements ReviewService {
             throw new BusinessException(ResultCode.NOT_FOUND, "店铺不存在");
         }
 
+        // 入库前校验（B1-1）：每个 imageUrl 必须是当前存储实现签发的自有 URL，
+        // 防路径穿越（"../" 前缀拼接）与外链注入；校验失败在写库前抛出
+        List<String> imageUrls = req.getImageUrls() == null ? List.of() : req.getImageUrls();
+        for (String url : imageUrls) {
+            if (StringUtils.hasText(url) && !fileStorageService.isOwnedUrl(url)) {
+                throw new BusinessException(ResultCode.BAD_REQUEST, "图片地址不合法，请通过 /files/image 上传后提交");
+            }
+        }
+
         Review review = new Review();
         review.setShopId(shopId);
         review.setUserId(userId);
@@ -119,9 +130,10 @@ public class ReviewServiceImpl implements ReviewService {
         review.setStatus(Constants.STATUS_NORMAL);
         reviewMapper.insert(review);
 
-        // 图片（有序）
-        List<String> imageUrls = req.getImageUrls();
-        if (imageUrls != null && !imageUrls.isEmpty()) {
+        // 图片（有序）：单 SQL 批量插入（≤9 张，B3-3）；oss_key 由 URL 反推真实入库（B1-1 治本），
+        // 删店清图直接用列值而非 URL 反推
+        if (!imageUrls.isEmpty()) {
+            List<ReviewImage> images = new ArrayList<>(imageUrls.size());
             int order = 0;
             for (String url : imageUrls) {
                 if (!StringUtils.hasText(url)) {
@@ -130,18 +142,25 @@ public class ReviewServiceImpl implements ReviewService {
                 ReviewImage img = new ReviewImage();
                 img.setReviewId(review.getId());
                 img.setUrl(url);
-                img.setOssKey("");
+                img.setOssKey(fileStorageService.ossKeyFromUrl(url));
                 img.setSortOrder(order++);
-                reviewImageMapper.insert(img);
+                images.add(img);
+            }
+            if (!images.isEmpty()) {
+                reviewImageMapper.insertBatch(images);
             }
         }
 
-        // 店铺计数：点评数 +1、评分汇总累加、平均评分重算（单条 UPDATE 内顺序求值）
+        // 店铺计数（B2-3）：拆两条 UPDATE——count/sum 相对自增（并发安全、同行锁串行化），
+        // avg 再由本连接可见的最新 count/sum 显式重算；不再依赖 MySQL SET 从左到右求值（非标准语义）。
+        // rating 走 {0} 参数绑定（虽经 @Min/@Max 校验为 int，不拼字面值）
         int r = req.getRating();
         shopMapper.update(null, new LambdaUpdateWrapper<Shop>()
                 .eq(Shop::getId, shopId)
-                .setSql("review_count = review_count + 1, rating_sum = rating_sum + " + r
-                        + ", avg_rating = ROUND(rating_sum / review_count, 2)"));
+                .setSql("review_count = review_count + 1, rating_sum = rating_sum + {0}", r));
+        shopMapper.update(null, new LambdaUpdateWrapper<Shop>()
+                .eq(Shop::getId, shopId)
+                .setSql("avg_rating = ROUND(rating_sum / review_count, 2)"));
 
         // 用户点评数 +1
         userMapper.update(null, new LambdaUpdateWrapper<User>()
