@@ -12,6 +12,7 @@ import com.tastelink.mapper.ReviewMapper;
 import com.tastelink.mapper.ShopCategoryMapper;
 import com.tastelink.mapper.ShopMapper;
 import com.tastelink.mapper.UserMapper;
+import com.tastelink.service.HotRankService;
 import com.tastelink.service.ShopCleanupProducer;
 import com.tastelink.service.ShopService;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,13 +52,15 @@ class AdminShopServiceImplTest {
     private ShopService shopService;
     @Mock
     private ShopCleanupProducer shopCleanupProducer;
+    @Mock
+    private HotRankService hotRankService;
 
     private AdminShopServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new AdminShopServiceImpl(shopMapper, categoryMapper, reviewMapper, userMapper,
-                shopService, shopCleanupProducer);
+                shopService, shopCleanupProducer, hotRankService);
     }
 
     private Shop shop(long id) {

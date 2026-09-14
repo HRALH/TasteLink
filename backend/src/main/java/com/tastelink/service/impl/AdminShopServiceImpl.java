@@ -16,6 +16,7 @@ import com.tastelink.mapper.ShopCategoryMapper;
 import com.tastelink.mapper.ShopMapper;
 import com.tastelink.mapper.UserMapper;
 import com.tastelink.service.AdminShopService;
+import com.tastelink.service.HotRankService;
 import com.tastelink.service.ShopCleanupProducer;
 import com.tastelink.service.ShopService;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +49,7 @@ public class AdminShopServiceImpl implements AdminShopService {
     private final UserMapper userMapper;
     private final ShopService shopService;
     private final ShopCleanupProducer shopCleanupProducer;
+    private final HotRankService hotRankService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -136,6 +138,11 @@ public class AdminShopServiceImpl implements AdminShopService {
                     .eq(User::getId, uid)
                     .setSql("review_count = GREATEST(0, review_count - " + c + ")")));
         }
+        // 3.5）B3-3：标记下架即对被隐藏点评从热度 ZSet 摘除（zrem），不等物理删阶段——
+        // 否则 rebuild 窗口期首页热榜仍带这些已隐藏 reviewId，ReviewServiceImpl:166-171 过滤死成员后条数不足。
+        // zrem 走 afterCommit（Redis IO 不进 DB 事务；HotRankService.onDelete 内部吞异常 + rebuild 兜底）
+        List<Long> hiddenReviewIds = reviews.stream().map(Review::getId).toList();
+        afterCommit(() -> hiddenReviewIds.forEach(hotRankService::onDelete));
         // 4）物删清理走延时 MQ 消费者；于此事务提交后投递，DB 回滚则不发
         afterCommit(() -> shopCleanupProducer.send(shopId));
     }

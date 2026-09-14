@@ -1,6 +1,7 @@
 package com.tastelink.config;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.tastelink.common.Constants;
 import com.tastelink.entity.Shop;
 import com.tastelink.entity.ShopDoc;
@@ -20,11 +21,15 @@ import java.util.List;
  * Canal 增量同步延后（infra 待办 B）时，此处是 ES↔MySQL 同步的唯一源；Canal 落地后退化为 drift 修正。
  * 以 MySQL {@code status=NORMAL} 全量快照灌 ES（快照式：覆盖上次脏成员）。ES 任意异常吞掉，
  * 与 Phase A {@code ScheduledRankRebuild} 同范式——不抛、靠下一周期重试。
+ * <p>
+ * B3-3 起分批灌（每批 {@code BATCH_SIZE} 条），避免大数据量时打满 DB/ES 并阻塞其他调度。
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class ScheduledShopReconcile {
+
+    private static final int BATCH_SIZE = 500;
 
     private final ShopMapper shopMapper;
     private final ElasticsearchOperations esOps;
@@ -39,14 +44,28 @@ public class ScheduledShopReconcile {
             return;
         }
         try {
-            List<Shop> shops = shopMapper.selectList(new LambdaQueryWrapper<Shop>()
-                    .eq(Shop::getStatus, Constants.STATUS_NORMAL));
-            if (shops.isEmpty()) {
-                return;
+            int total = 0;
+            long current = 1;
+            // 分页拉取 status=NORMAL 店铺，每批转 ShopDoc 后灌 ES；MP Page 1-based
+            for (;;) {
+                Page<Shop> page = new Page<>(current, BATCH_SIZE, false);
+                shopMapper.selectPage(page, new LambdaQueryWrapper<Shop>()
+                        .eq(Shop::getStatus, Constants.STATUS_NORMAL));
+                List<Shop> shops = page.getRecords();
+                if (shops.isEmpty()) {
+                    break;
+                }
+                List<ShopDoc> docs = shops.stream().map(this::toDoc).toList();
+                esOps.save(docs);
+                total += docs.size();
+                if (shops.size() < BATCH_SIZE) {
+                    break;
+                }
+                current++;
             }
-            List<ShopDoc> docs = shops.stream().map(this::toDoc).toList();
-            esOps.save(docs);
-            log.info("shop index reconciled: {} docs", docs.size());
+            if (total > 0) {
+                log.info("shop index reconciled: {} docs", total);
+            }
         } catch (Exception e) {
             log.warn("shop index reconcile failed, will retry next cycle: {}", e.getMessage());
         }
