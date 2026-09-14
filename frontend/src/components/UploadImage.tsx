@@ -5,6 +5,7 @@ import { PlusOutlined } from '@ant-design/icons'
 import { uploadImage } from '../api/file'
 import { MAX_REVIEW_IMAGES } from '../utils/constants'
 import { palette } from '../styles/tokens'
+import { compressImage } from '../utils/compressImage'
 
 const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp']
 
@@ -47,7 +48,9 @@ export default function UploadImage({
       const raw = options.file as File
       const uid = (options.file as UploadFile).uid
       try {
-        const res = await uploadImage(raw)
+        // 上传前压缩(canvas 缩长边+重编码);失败/无需压缩时回退原图
+        const compressed = await compressImage(raw)
+        const res = await uploadImage(compressed ?? raw)
         onSuccess?.(res, undefined)
         setFileList((prev) => {
           const next = prev.map((item) =>

@@ -13,6 +13,7 @@ import { useCategories } from '../../hooks/useCategories'
 import { Code, CITIES } from '../../utils/constants'
 import { palette } from '../../styles/tokens'
 import type { ShopDetailVO, UpdateShopRequest } from '../../types/api'
+import { thumb } from '../../utils/thumb'
 
 const { TextArea } = Input
 
@@ -158,8 +159,10 @@ export default function AdminShopEditPage() {
               {coverUrl ? (
                 <div style={{ marginBottom: 12 }}>
                   <img
-                    src={coverUrl}
+                    src={thumb(coverUrl, 640)}
                     alt="当前封面"
+                    loading="lazy"
+                    decoding="async"
                     style={{ width: '100%', maxWidth: 320, height: 160, objectFit: 'cover', borderRadius: 8 }}
                   />
                   <div style={{ color: palette.muted, fontSize: 12, marginTop: 4 }}>当前封面。上传新图将替换。</div>

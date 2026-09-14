@@ -3,6 +3,7 @@ import { EnvironmentOutlined, MessageOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
 import type { ShopVO } from '../types/api'
 import { palette } from '../styles/tokens'
+import { thumb } from '../utils/thumb'
 import RankBadge from './editorial/RankBadge'
 
 interface ShopCardProps {

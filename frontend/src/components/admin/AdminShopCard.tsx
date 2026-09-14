@@ -3,6 +3,7 @@ import { DeleteOutlined, EditOutlined, EnvironmentOutlined, MessageOutlined } fr
 import { Link } from 'react-router-dom'
 import type { ShopVO } from '../../types/api'
 import { palette } from '../../styles/tokens'
+import { thumb } from '../../utils/thumb'
 
 interface AdminShopCardProps {
   shop: ShopVO

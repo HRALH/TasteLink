@@ -24,6 +24,7 @@ import SectionTitle from '../../components/editorial/SectionTitle'
 import Eyebrow from '../../components/editorial/Eyebrow'
 import { Reveal } from '../../components/motion'
 import { staggerDelay } from '../../utils/motion'
+import { thumb } from '../../utils/thumb'
 import { shopApi } from '../../api/shop'
 import { palette } from '../../styles/tokens'
 import { DEFAULT_PAGE, DEFAULT_SIZE, ReviewSort } from '../../utils/constants'
@@ -62,8 +63,10 @@ export default function ShopDetailPage() {
           {shop.coverUrl && (
             <div style={{ position: 'relative' }}>
               <img
-                src={shop.coverUrl}
+                src={thumb(shop.coverUrl, 960)}
                 alt={shop.name}
+                loading="lazy"
+                decoding="async"
                 style={{ width: '100%', height: 260, objectFit: 'cover', display: 'block' }}
               />
               <div

@@ -25,6 +25,7 @@ import PullQuote from '../../components/editorial/PullQuote'
 import SectionTitle from '../../components/editorial/SectionTitle'
 import { Reveal } from '../../components/motion'
 import { palette } from '../../styles/tokens'
+import { thumb } from '../../utils/thumb'
 
 const { TextArea } = Input
 
@@ -156,9 +157,10 @@ export default function ReviewDetailPage() {
               {review.images.map((url, i) => (
                 <AntImage
                   key={i}
-                  src={url}
+                  src={thumb(url, 240)}
                   width={120}
                   height={120}
+                  preview={{ src: url }}
                   style={{ objectFit: 'cover', borderRadius: 8 }}
                 />
               ))}
