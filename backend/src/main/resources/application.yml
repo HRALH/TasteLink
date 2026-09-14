@@ -72,6 +72,16 @@ spring:
     init:
       mode: never
 
+# B4-1 actuator：仅暴露 health（permitAll）与 metrics（ADMIN），其余端点关闭
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
+  endpoint:
+    health:
+      show-details: never   # 不向前端泄露组件详情（DB/Redis/MQ 状态）
+
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
