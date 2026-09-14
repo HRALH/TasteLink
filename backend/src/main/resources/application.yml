@@ -25,8 +25,12 @@ spring:
     password: ${DB_PASSWORD:}
     hikari:
       maximum-pool-size: 10
-      minimum-idle: 2
+      # B4-5：minimum-idle 提至与 max 同量级，避免突发流量时从 2 条起步建连的毛刺
+      minimum-idle: 10
       connection-timeout: 20000
+      # B4-5：local 下开启泄露检测，连接被借出超 30s 未归还即记 warn 便于定位长事务/IO 泄漏
+      # 部署环境按需经 LEAK_DETECTION_THRESHOLD 关闭或调高（0=关闭）
+      leak-detection-threshold: ${LEAK_DETECTION_THRESHOLD:30000}
   # Redis（v2 Phase A 点评审热度排行缓存；Lettuce 懒连接，未起 Redis 不影响启动）
   data:
     redis:
