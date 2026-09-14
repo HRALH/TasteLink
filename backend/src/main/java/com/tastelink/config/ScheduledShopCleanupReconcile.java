@@ -39,6 +39,9 @@ public class ScheduledShopCleanupReconcile {
 
     /** 默认每 2 分钟；cron 由 tastelink.rabbitmq.reconcile-cron 配置。 */
     @Scheduled(cron = "${tastelink.rabbitmq.reconcile-cron:0 */2 * * * *}")
+    @net.javacrumbs.shedlock.spring.annotation.SchedulerLock(
+            name = "shop-cleanup-reconcile", lockAtMostFor = "${tastelink.shedlock.shop-cleanup-reconcile:PT4M}",
+            lockAtLeastFor = "PT5S")
     public void reconcile() {
         // 仅认已超「延时窗口 + 宽限」仍滞留被标记者，否则仍在 MQ 正常清理途中，不抢跑
         LocalDateTime cutoff = LocalDateTime.now().minus(delayMs + graceMs, ChronoUnit.MILLIS);

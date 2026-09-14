@@ -71,6 +71,12 @@ spring:
   sql:
     init:
       mode: never
+  # B4-3 调度加固：scheduling 线程池提至 3，让 rank-rebuild / shop-cleanup-reconcile /
+  # shop-index-reconcile 三个 @Scheduled 不再单线程串行（避免长任务阻塞其他 cron）
+  task:
+    scheduling:
+      pool:
+        size: 3
 
 # B4-1 actuator：仅暴露 health（permitAll）与 metrics（ADMIN），其余端点关闭
 management:

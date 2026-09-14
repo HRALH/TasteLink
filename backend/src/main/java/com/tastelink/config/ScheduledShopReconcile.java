@@ -39,6 +39,9 @@ public class ScheduledShopReconcile {
 
     /** 默认每 10 分钟；cron 由 tastelink.search.rebuild-cron 配置。 */
     @Scheduled(cron = "${tastelink.search.rebuild-cron:0 */10 * * * *}")
+    @net.javacrumbs.shedlock.spring.annotation.SchedulerLock(
+            name = "shop-index-reconcile", lockAtMostFor = "${tastelink.shedlock.shop-index-reconcile:PT8M}",
+            lockAtLeastFor = "PT10S")
     public void reconcile() {
         if (!enabled) {
             return;
