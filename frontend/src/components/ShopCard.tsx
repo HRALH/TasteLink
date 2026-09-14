@@ -19,7 +19,13 @@ export default function ShopCard({ shop, rank }: ShopCardProps) {
         className="tl-card tl-zoomable"
         cover={
           shop.coverUrl ? (
-            <img src={shop.coverUrl} alt={shop.name} style={{ height: 160, objectFit: 'cover' }} />
+            <img
+              src={thumb(shop.coverUrl, 640)}
+              alt={shop.name}
+              loading="lazy"
+              decoding="async"
+              style={{ width: '100%', height: 160, objectFit: 'cover' }}
+            />
           ) : (
             <div style={{ height: 160, background: 'linear-gradient(135deg, #f3ebdb, #efe3cc)' }} />
           )

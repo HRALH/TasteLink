@@ -21,7 +21,13 @@ export default function AdminShopCard({ shop, onEdit, onDelete }: AdminShopCardP
       className="tl-card"
       cover={
         shop.coverUrl ? (
-          <img src={shop.coverUrl} alt={shop.name} style={{ height: 140, objectFit: 'cover' }} />
+          <img
+            src={thumb(shop.coverUrl, 640)}
+            alt={shop.name}
+            loading="lazy"
+            decoding="async"
+            style={{ width: '100%', height: 140, objectFit: 'cover' }}
+          />
         ) : (
           <div style={{ height: 140, background: 'linear-gradient(135deg, #f3ebdb, #efe3cc)' }} />
         )
