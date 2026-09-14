@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { UserInfo } from '../types/api'
 import { AUTH_STORAGE_KEY } from '../utils/constants'
-import { getRoleFromToken, type Role } from '../utils/jwt'
+import { getRoleFromToken, isTokenExpired, type Role } from '../utils/jwt'
 
 /**
  * 全局登录态（docs/03 §5.2）
@@ -51,7 +51,13 @@ export const useAuthStore = create<AuthState>()(
         isLoggedIn: s.isLoggedIn,
       }),
       onRehydrateStorage: () => (state) => {
-        if (state && state.token && state.role === null) state.rehydrateRole()
+        if (!state) return
+        // F5-2：持久化恢复时 token 已过期即清登录态，避免 UI 假登录态直到 401
+        if (state.token && isTokenExpired(state.token)) {
+          state.logout()
+          return
+        }
+        if (state.token && state.role === null) state.rehydrateRole()
       },
     },
   ),
