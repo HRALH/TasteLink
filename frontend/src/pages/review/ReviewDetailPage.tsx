@@ -162,6 +162,7 @@ export default function ReviewDetailPage() {
                 <AntImage
                   key={i}
                   src={thumb(url, 240)}
+                  alt={`${review.userNickname}的点评图片 ${i + 1}`}
                   width={120}
                   height={120}
                   preview={{ src: url }}

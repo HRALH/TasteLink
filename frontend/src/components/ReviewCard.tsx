@@ -56,6 +56,7 @@ export default function ReviewCard({
               <AntImage
                 key={i}
                 src={thumb(url, 160)}
+                alt={`${review.userNickname}的点评图片 ${i + 1}`}
                 width={80}
                 height={80}
                 preview={{ src: url }}
