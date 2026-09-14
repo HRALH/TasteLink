@@ -3,7 +3,7 @@ import axios, {
   type AxiosRequestConfig,
   type InternalAxiosRequestConfig,
 } from 'axios'
-import { message } from 'antd'
+import { getAppMessage } from '../utils/message'
 import { useAuthStore } from '../store/authStore'
 import { Code } from '../utils/constants'
 
@@ -26,11 +26,31 @@ export class ApiError extends Error {
 }
 
 /**
+ * F5-1：把 axios / 浏览器层抛出的英文错误原文归一为面向用户的中文文案。
+ * - timeout → 「网络超时，请重试」
+ * - Network Error（无响应/无法连接）→ 「网络异常，请检查连接」
+ * 其余带 HTTP 体 message 的交调用方/上游分支处理，不在此强制覆盖。
+ */
+function normalizeNetworkError(error: AxiosError): string | null {
+  // axios 超时：error.code === 'ECONNABORTED' 且 message 含 timeout
+  if (error.code === 'ECONNABORTED' || /timeout of \d+ms exceeded/i.test(error.message)) {
+    return '网络超时，请重试'
+  }
+  // 网络层失败：无 response、且非超时
+  if (!error.response && (error.message === 'Network Error' || error.code === 'ERR_NETWORK')) {
+    return '网络异常，请检查连接'
+  }
+  return null
+}
+
+/**
  * axios 实例与拦截器封装（docs/03 §5.1）
  * - baseURL：env VITE_API_BASE_URL，默认 /api/v1（dev 经 Vite 代理转后端）
  * - 请求拦截器：自动注入 Authorization: Bearer ${token}
  * - 响应拦截器：取后端 R.data；code≠0 提示并 reject；幂等码(已点赞/已关注)按成功语义返回 data
  *   HTTP 401：清登录态并跳 /login(携带 redirect)
+ * - F5-1：message 经 getAppMessage() 取 App.useApp() context 实例（吃 ConfigProvider 主题，
+ *   避开 antd5 静态函数 deprecation 警告）；网络层英文错误归一为中文文案
  */
 const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
@@ -80,7 +100,7 @@ instance.interceptors.response.use(
       if (PROCESSABLE_CODES.has(r.code)) {
         return Promise.reject(new ApiError(r.code, r.message || '', r.data))
       }
-      message.error(r.message || '请求失败')
+      getAppMessage().error(r.message || '请求失败')
       return Promise.reject(new ApiError(r.code, r.message || `code=${r.code}`, r.data))
     }
     return r.data
@@ -90,19 +110,19 @@ instance.interceptors.response.use(
     const r = error.response?.data as { code?: number; message?: string } | undefined
     if (status === 401) {
       useAuthStore.getState().logout()
-      message.error(r?.message || '登录已失效，请重新登录')
+      getAppMessage().error(r?.message || '登录已失效，请重新登录')
       redirectToLogin()
     } else if (status === 409 && PROCESSABLE_CODES.has(r?.code ?? 0)) {
       // 乐观锁冲突走 HTTP 409：抑制 toast，抛 ApiError 交调用方弹 Modal（后端 code 409）
       return Promise.reject(new ApiError(r?.code ?? 409, r?.message || '', r))
     } else if (status && status >= 500) {
-      message.error(r?.message || '服务器异常，请稍后再试')
+      getAppMessage().error(r?.message || '服务器异常，请稍后再试')
     } else if (r?.message) {
-      message.error(r.message)
-    } else if (error.message) {
-      message.error(error.message)
+      getAppMessage().error(r.message)
     } else {
-      message.error('网络异常，请稍后再试')
+      // F5-1：英文网络错误归一为中文文案
+      const normalized = normalizeNetworkError(error)
+      getAppMessage().error(normalized ?? '网络异常，请稍后再试')
     }
     return Promise.reject(error)
   },
