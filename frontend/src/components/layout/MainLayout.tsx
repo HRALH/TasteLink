@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Avatar, Button, Dropdown, Layout, Space, message } from 'antd'
+import { Avatar, Badge, Button, Dropdown, Layout, Space, message } from 'antd'
+import { BellOutlined } from '@ant-design/icons'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import type { MenuProps } from 'antd'
 import { useAuthStore } from '../../store/authStore'
 import { palette, contentWidth } from '../../styles/tokens'
+import { notificationApi } from '../../api/notification'
 import { PageTransition } from '../motion'
 
 const { Header, Content, Footer } = Layout
@@ -28,9 +31,15 @@ export default function MainLayout() {
       ? '/'
       : location.pathname.startsWith('/shops')
         ? '/shops'
-        : location.pathname.startsWith('/admin')
-          ? '/admin'
-          : location.pathname
+        : location.pathname.startsWith('/admin/shops')
+          ? '/admin/shops'
+          : location.pathname.startsWith('/admin/reviews')
+            ? '/admin/reviews'
+            : location.pathname.startsWith('/admin')
+              ? '/admin'
+              : location.pathname.startsWith('/following')
+                ? '/following'
+                : location.pathname
 
   // 顶栏滚动阴影：向下滚动后增暖色细影，停在顶部时收起
   const [scrolled, setScrolled] = useState(false)
@@ -52,6 +61,21 @@ export default function MainLayout() {
     { type: 'divider' as const },
     { key: 'logout', label: '退出登录', onClick: handleLogout },
   ]
+
+  // 通知未读数轮询（F1）：30s 拉一次，仅登录态启用；Red 点驱动顶栏铃铛。
+  // NotificationsPage 标记已读会 invalidate ['notifications']（含本 key），链上同步。
+  const { data: unreadData } = useQuery({
+    queryKey: ['notifications', 'unread-count'],
+    queryFn: notificationApi.unreadCount,
+    enabled: isLoggedIn,
+    refetchInterval: 30000,
+  })
+  const unreadCount = unreadData?.count ?? 0
+
+  // 导航项：基础(首页/店铺) + 登录态(关注) + 管理员(店铺管理/内容治理)
+  const navItems = NAV
+    .concat(isLoggedIn ? [{ key: '/following', label: '关注' }] : [])
+    .concat(isAdmin ? [{ key: '/admin/shops', label: '店铺管理' }, { key: '/admin/reviews', label: '内容治理' }] : [])
 
   return (
     <Layout style={{ minHeight: '100vh', background: palette.paper }}>
@@ -95,7 +119,7 @@ export default function MainLayout() {
               TasteLink
             </Link>
             <nav style={{ display: 'flex', gap: 6 }} aria-label="主导航">
-              {(isAdmin ? [...NAV, { key: '/admin', label: '管理后台' }] : NAV).map((item) => {
+              {navItems.map((item) => {
                 const active = selectedKey === item.key
                 return (
                   <Link
@@ -131,6 +155,13 @@ export default function MainLayout() {
           </Space>
 
           <Space size={12}>
+            {isLoggedIn ? (
+              <Link to="/notifications" aria-label="通知中心">
+                <Badge count={unreadCount} size="small" offset={[-3, 3]}>
+                  <BellOutlined style={{ fontSize: 18, color: palette.ink }} />
+                </Badge>
+              </Link>
+            ) : null}
             {isLoggedIn && userInfo ? (
               <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
                 <Space size={8} style={{ cursor: 'pointer' }}>

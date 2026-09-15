@@ -22,6 +22,9 @@ const FollowingsPage = lazy(() => import('../pages/user/FollowingsPage'))
 const FollowersPage = lazy(() => import('../pages/user/FollowersPage'))
 const AdminShopListPage = lazy(() => import('../pages/admin/AdminShopListPage'))
 const AdminShopEditPage = lazy(() => import('../pages/admin/AdminShopEditPage'))
+const AdminReviewListPage = lazy(() => import('../pages/admin/AdminReviewListPage'))
+const NotificationsPage = lazy(() => import('../pages/notification/NotificationsPage'))
+const FollowingFeedPage = lazy(() => import('../pages/following/FollowingFeedPage'))
 
 /** 懒加载页 fallback：沿用全站骨架态（与页内加载态一致） */
 const pageFallback = (
@@ -96,6 +99,33 @@ export default function AppRouter() {
               <MePage />
             </RequireAuth>
           }
+        />
+        {/* 产品优化 F1：通知中心 */}
+        <Route
+          path="/notifications"
+          element={lazyPage(
+            <RequireAuth>
+              <NotificationsPage />
+            </RequireAuth>,
+          )}
+        />
+        {/* 产品优化 F3：关注的人的点评 */}
+        <Route
+          path="/following"
+          element={lazyPage(
+            <RequireAuth>
+              <FollowingFeedPage />
+            </RequireAuth>,
+          )}
+        />
+        {/* 产品优化 F4：后台内容治理 */}
+        <Route
+          path="/admin/reviews"
+          element={lazyPage(
+            <RequireAdmin>
+              <AdminReviewListPage />
+            </RequireAdmin>,
+          )}
         />
         <Route
           path="/admin/shops"

@@ -113,12 +113,12 @@ export default function ShopDetailPage() {
                 <Space align="center">
                   <Rate disabled allowHalf value={shop.avgRating} style={{ fontSize: 18 }} />
                   <span style={{ fontSize: 18, fontWeight: 700, color: palette.appetite }}>
-                    {shop.avgRating.toFixed(1)}
+                    {shop.avgRating > 0 ? shop.avgRating.toFixed(1) : '暂无评分'}
                   </span>
                 </Space>
                 <Space size={16} style={{ color: palette.muted, fontSize: 13 }}>
                   <span>
-                    <MessageOutlined /> {shop.reviewCount} 点评
+                    <MessageOutlined /> {shop.reviewCount > 0 ? `${shop.reviewCount} 点评` : '暂无点评'}
                   </span>
                   <span>
                     <LikeOutlined /> {shop.likeCount} 赞

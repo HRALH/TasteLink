@@ -106,6 +106,60 @@ export interface HomeVO {
   hotReviews: ReviewVO[]
 }
 
+// ===== 通知（产品优化 F1）=====
+
+export interface NotificationVO {
+  id: number
+  type: 'REVIEW_LIKED' | 'REVIEW_COMMENTED' | 'USER_FOLLOWED'
+  actorId: number
+  actorNickname: string
+  actorAvatarUrl: string
+  targetType: 'REVIEW' | 'USER'
+  targetId: number
+  preview: string
+  isRead: boolean
+  createTime: string
+}
+
+export interface UnreadCountResult {
+  count: number
+}
+
+// ===== 举报（产品优化 F4）=====
+
+export interface ReportVO {
+  id: number
+  reporterId: number
+  reporterNickname: string
+  targetType: 'REVIEW' | 'COMMENT' | 'USER' | 'SHOP'
+  targetId: number
+  reason: string
+  status: 'PENDING' | 'RESOLVED'
+  createTime: string
+}
+
+export interface CreateReportBody {
+  targetType: string
+  targetId: number
+  reason: string
+}
+
+// ===== 后台点评治理（产品优化 F4）=====
+
+export interface AdminReviewVO {
+  id: number
+  shopId: number
+  shopName: string
+  userId: number
+  userNickname: string
+  content: string
+  rating: number
+  likeCount: number
+  replyCount: number
+  status: number
+  createTime: string
+}
+
 // ===== 操作结果 =====
 
 export interface LoginResult {

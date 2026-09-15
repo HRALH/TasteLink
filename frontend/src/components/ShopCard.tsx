@@ -58,14 +58,21 @@ export default function ShopCard({ shop, rank }: ShopCardProps) {
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shop.city}</span>
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <MessageOutlined /> {shop.reviewCount}
+            <MessageOutlined /> {shop.reviewCount > 0 ? `${shop.reviewCount} 点评` : '暂无点评'}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
-          <Rate disabled allowHalf value={shop.avgRating} style={{ fontSize: 14 }} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: palette.appetite }}>
-            {shop.avgRating.toFixed(1)}
-          </span>
+          {shop.avgRating > 0 ? (
+            <>
+              <Rate disabled allowHalf value={shop.avgRating} style={{ fontSize: 14 }} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: palette.appetite }}>
+                {shop.avgRating.toFixed(1)}
+              </span>
+            </>
+          ) : (
+            // 无点评店不应显示"0.0"空星（失真）——展示「暂无评分」，与评分缺失语义一致
+            <span style={{ fontSize: 13, color: palette.muted }}>暂无评分</span>
+          )}
         </div>
       </Card>
     </Link>

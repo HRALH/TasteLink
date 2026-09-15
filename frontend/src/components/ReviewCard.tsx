@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom'
 import type { ReviewVO } from '../types/api'
 import { palette } from '../styles/tokens'
 import { thumb } from '../utils/thumb'
+import { useAuthStore } from '../store/authStore'
+import ReportButton from './ReportButton'
 
 /** 点评卡片：杂志引文 —— 署名 + 评分 + 宋体引文正文 + 图片 + 点赞/评论/详情 */
 export default function ReviewCard({
@@ -13,6 +15,8 @@ export default function ReviewCard({
   review: ReviewVO
   showShop?: boolean
 }) {
+  const meId = useAuthStore((s) => s.userInfo?.userId)
+  const isMine = meId != null && meId === review.userId
   return (
     <Card className="tl-card" styles={{ body: { padding: 18 } }}>
       <div
@@ -77,6 +81,7 @@ export default function ReviewCard({
         <Link to={`/reviews/${review.id}`} style={{ fontWeight: 600 }}>
           查看详情
         </Link>
+        {!isMine ? <ReportButton targetType="REVIEW" targetId={review.id} /> : null}
       </Space>
     </Card>
   )
