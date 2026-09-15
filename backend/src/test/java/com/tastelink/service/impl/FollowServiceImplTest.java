@@ -6,6 +6,7 @@ import com.tastelink.entity.Follow;
 import com.tastelink.entity.User;
 import com.tastelink.mapper.FollowMapper;
 import com.tastelink.mapper.UserMapper;
+import com.tastelink.service.NotificationService;
 import com.tastelink.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,12 +38,14 @@ class FollowServiceImplTest {
     private UserMapper userMapper;
     @Mock
     private UserService userService;
+    @Mock
+    private NotificationService notificationService;
 
     private FollowServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new FollowServiceImpl(followMapper, userMapper, userService);
+        service = new FollowServiceImpl(followMapper, userMapper, userService, notificationService);
     }
 
     private Follow follow(long followerId, long followeeId) {

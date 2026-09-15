@@ -9,6 +9,7 @@ import com.tastelink.mapper.ReviewMapper;
 import com.tastelink.mapper.ShopMapper;
 import com.tastelink.mapper.UserMapper;
 import com.tastelink.service.HotRankService;
+import com.tastelink.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,13 +44,15 @@ class InteractionServiceImplTest {
     private UserMapper userMapper;
     @Mock
     private HotRankService hotRankService;
+    @Mock
+    private NotificationService notificationService;
 
     private InteractionServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new InteractionServiceImpl(reviewMapper, reviewLikeMapper, reviewCommentMapper,
-                shopMapper, userMapper, hotRankService);
+                shopMapper, userMapper, hotRankService, notificationService);
     }
 
     @Test

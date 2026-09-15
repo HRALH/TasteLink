@@ -33,4 +33,23 @@ public final class Constants {
 
     /** 密码最小长度。 */
     public static final int PASSWORD_MIN_LEN = 8;
+
+    /** 通知类型（产品优化 F1，存 t_notification.type）。 */
+    public static final String NOTIFY_REVIEW_LIKED = "REVIEW_LIKED";
+    public static final String NOTIFY_REVIEW_COMMENTED = "REVIEW_COMMENTED";
+    public static final String NOTIFY_USER_FOLLOWED = "USER_FOLLOWED";
+
+    /** 通知目标类型。 */
+    public static final String TARGET_REVIEW = "REVIEW";
+    public static final String TARGET_USER = "USER";
+
+    /** 举报目标类型（产品优化 F4，存 t_report.target_type）。 */
+    public static final String REPORT_TARGET_REVIEW = "REVIEW";
+    public static final String REPORT_TARGET_COMMENT = "COMMENT";
+    public static final String REPORT_TARGET_USER = "USER";
+    public static final String REPORT_TARGET_SHOP = "SHOP";
+
+    /** 举报状态。 */
+    public static final String REPORT_PENDING = "PENDING";
+    public static final String REPORT_RESOLVED = "RESOLVED";
 }

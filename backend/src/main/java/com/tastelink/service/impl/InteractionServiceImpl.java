@@ -22,6 +22,7 @@ import com.tastelink.mapper.ShopMapper;
 import com.tastelink.mapper.UserMapper;
 import com.tastelink.service.HotRankService;
 import com.tastelink.service.InteractionService;
+import com.tastelink.service.NotificationService;
 import com.tastelink.utils.DateUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +47,7 @@ public class InteractionServiceImpl implements InteractionService {
     private final ShopMapper shopMapper;
     private final UserMapper userMapper;
     private final HotRankService hotRankService;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -65,12 +67,11 @@ public class InteractionServiceImpl implements InteractionService {
                     .setSql("like_count = like_count + 1"));
             // 热度缓存：仅在真正新增点赞（非幂等重复）后更新；于事务提交后执行，DB 回滚则不增（Phase A）
             afterCommit(() -> hotRankService.onLike(reviewId));
+            // 通知点评作者（F1）：同事务原子提交、Service 内部吞异常绝不阻塞本体；自己赞自己跳过
+            notificationService.create(review.getUserId(), userId, Constants.NOTIFY_REVIEW_LIKED,
+                    Constants.TARGET_REVIEW, reviewId, "");
         } catch (DuplicateKeyException dup) {
-            // 已点赞：幂等返回当前计数，不报错（缓存亦不动）
-            // 前提（B2-5）：本方法必须运行在非嵌套的物理事务中——依赖 MySQL/InnoDB 的
-            // statement-level 回滚语义，唯一键冲突仅回滚失败语句、事务仍可继续提交；
-            // 若改为 PROPAGATION_NESTED（savepoint 语义）或 catch 后继续写库需重新评估。
-            log.debug("duplicate like ignored (idempotent): reviewId={}, userId={}", reviewId, userId);
+            // 已点赞：幂等返回当前计数，不报错（缓存亦不动，通知亦不发）
         }
         Integer count = reviewMapper.selectById(reviewId).getLikeCount();
         return new LikeCountVO(count);
@@ -118,7 +119,7 @@ public class InteractionServiceImpl implements InteractionService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public CommentVO createComment(Long reviewId, Long userId, String content) {
-        mustGetReview(reviewId);
+        Review review = mustGetReview(reviewId);
         ReviewComment c = new ReviewComment();
         c.setReviewId(reviewId);
         c.setUserId(userId);
@@ -129,6 +130,9 @@ public class InteractionServiceImpl implements InteractionService {
         reviewMapper.update(null, new LambdaUpdateWrapper<Review>()
                 .eq(Review::getId, reviewId)
                 .setSql("reply_count = reply_count + 1"));
+        // 通知点评作者（F1）：带评论内容快照；自己评自己跳过、失败吞异常
+        notificationService.create(review.getUserId(), userId, Constants.NOTIFY_REVIEW_COMMENTED,
+                Constants.TARGET_REVIEW, reviewId, content);
         return toCommentVO(c, userMapper.selectById(userId));
     }
 
