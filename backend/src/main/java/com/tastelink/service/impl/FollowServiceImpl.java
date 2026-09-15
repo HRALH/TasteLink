@@ -16,6 +16,7 @@ import com.tastelink.mapper.FollowMapper;
 import com.tastelink.mapper.UserMapper;
 import com.tastelink.security.SecurityContextHelper;
 import com.tastelink.service.FollowService;
+import com.tastelink.service.NotificationService;
 import com.tastelink.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
@@ -34,6 +35,7 @@ public class FollowServiceImpl implements FollowService {
     private final FollowMapper followMapper;
     private final UserMapper userMapper;
     private final UserService userService;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -59,6 +61,9 @@ public class FollowServiceImpl implements FollowService {
             userMapper.update(null, new LambdaUpdateWrapper<User>()
                     .eq(User::getId, followeeId)
                     .setSql("follower_count = follower_count + 1"));
+            // 通知被关注者（F1）：关注不可自指（CANNOT_FOLLOW_SELF 已拦），失败吞异常
+            notificationService.create(followeeId, userId, Constants.NOTIFY_USER_FOLLOWED,
+                    Constants.TARGET_USER, followeeId, "");
         } catch (DuplicateKeyException dup) {
             // 已关注：幂等返回当前关注数
         }
@@ -102,6 +107,15 @@ public class FollowServiceImpl implements FollowService {
                 .orderByDesc(Follow::getCreateTime));
         List<Long> followerIds = page.getRecords().stream().map(Follow::getFollowerId).toList();
         return PageResult.from(page, toUserVOs(followerIds));
+    }
+
+    @Override
+    public List<Long> followeeIds(Long userId) {
+        // 只取 followee_id 列（投影查询），不分页；feed 用，实际关注数有界
+        return followMapper.selectList(new LambdaQueryWrapper<Follow>()
+                        .select(Follow::getFolloweeId)
+                        .eq(Follow::getFollowerId, userId))
+                .stream().map(Follow::getFolloweeId).toList();
     }
 
     private List<UserVO> toUserVOs(List<Long> userIds) {

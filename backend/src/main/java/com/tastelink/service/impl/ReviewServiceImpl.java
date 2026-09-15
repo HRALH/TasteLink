@@ -90,6 +90,24 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    public PageResult<ReviewVO> listByFollowees(List<Long> followeeIds, PageQuery pq) {
+        Page<Review> page = new Page<>(pq.getPageOrDefault(), pq.getSizeOrDefault());
+        // 无关注对象：直接返回空分页，避免 IN() 生成非法 SQL
+        if (followeeIds == null || followeeIds.isEmpty()) {
+            page.setTotal(0);
+            return PageResult.from(page, List.of());
+        }
+        LambdaQueryWrapper<Review> w = new LambdaQueryWrapper<Review>()
+                .in(Review::getUserId, followeeIds)
+                .eq(Review::getStatus, Constants.STATUS_NORMAL)
+                .orderByDesc(Review::getCreateTime);
+        reviewMapper.selectPage(page, w);
+        // 复用私有 assemble：批量装 shop/user/images/hasLiked，与店铺/用户列表一致
+        List<ReviewVO> vos = assemble(page.getRecords(), SecurityContextHelper.getCurrentUserId());
+        return PageResult.from(page, vos);
+    }
+
+    @Override
     public List<ReviewVO> recentByShop(Long shopId, int limit) {
         Page<Review> page = new Page<>(1, limit, false);
         LambdaQueryWrapper<Review> w = new LambdaQueryWrapper<Review>()

@@ -22,6 +22,7 @@ public enum ResultCode {
     ALREADY_LIKED(40902, 200, "已点赞"),
     ALREADY_FOLLOWED(40903, 200, "已关注"),
     CANNOT_FOLLOW_SELF(40904, 200, "不可关注自己"),
+    ALREADY_REPORTED(40905, 200, "已举报过该内容"),
 
     // B1-2 登录防爆破（HTTP 200，与 4090x 同风格，前端按普通错误 toast）
     LOGIN_RATE_LIMITED(42901, 200, "登录尝试过于频繁，请 10 分钟后再试"),

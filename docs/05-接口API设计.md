@@ -86,11 +86,13 @@
 | 40902 | 200 | 已点赞（幂等返回，业务成功） |
 | 40903 | 200 | 已关注（幂等返回，业务成功） |
 | 40904 | 200 | 不可关注自己 |
+| 40905 | 200 | 已举报过该内容（F4，前端默认错误路径 toast 友好提示） |
 | 42901 | 200 | 登录尝试过于频繁，请 10 分钟后再试（登录限流） |
 | 409 | 409 | 店铺已被他人修改，请刷新重试（管理员并发改店铺，乐观锁冲突） |
 | 500 | 500 | 服务器内部错误（不泄露堆栈） |
 
 > 点赞/关注幂等场景：重复操作视为成功，返回当前计数或当前态，避免前端处理冲突。
+> 举报幂等（F4）：`uk_reporter_target` 去重，重复举报转抛 40905，HTTP 200，前端走默认错误路径 toast「已举报过该内容」（无需特殊幂等分支）。
 
 ---
 
@@ -364,6 +366,66 @@
 响应 `data`：无（`R<Void>`）。
 规则：同事务内标记 `shop.status=0` + 级联 `review.status=0`（即时从公开读路径消失）+ 对称回扣发布用户 `review_count`；事务提交后投递延时清理消息，**到期由异步消费者物理级联删** `t_review_image → t_review_like → t_review_comment → t_review → t_shop`、删 OSS/本地图、从热度 ZSet 摘除。延迟窗口（默认 5s）便于「撤销误删」。并发改/删冲突仍返回 409 `SHOP_VERSION_CONFLICT`；二次删除返回 404（幂等口风）。broker 缺失时 afterCommit 不发消息，由对账调度直接物理清理（`tastelink.rabbitmq.enabled=false` 同此降级）。详见 `docs/02 §4.8`。
 
+#### GET `/api/v1/admin/reviews`（管理员，产品优化 F4）
+分页查所有点评（含已下架 `status=0`），供后台内容治理列表。
+
+查询参数：`page`(默认1)、`size`(默认10,上限50)、`status`(可选，1正常/0已下架，省略=全部)。
+响应 `data`：`PageResult<AdminReviewVO>`（含 `status` 字段区分正常/已下架）。
+
+#### PUT `/api/v1/admin/reviews/{id}/hide`（管理员，产品优化 F4）
+下架点评。同事务置 `review.status=0` + 镜像回扣 `t_shop.review_count/rating_sum`、重算 `avg_rating`、递减 `t_user.review_count`；事务提交后 `hotRankService.onDelete` 摘热度 ZSet。不物理删，可恢复。
+请求体/响应 `data`：无（`R<Void>`）。规则：点评不存在或已下架返回 404；店铺已下架时不阻断下架（仅恢复时校验店铺）。
+
+#### PUT `/api/v1/admin/reviews/{id}/restore`（管理员，产品优化 F4）
+恢复点评。同事务置 `review.status=1` + 镜像加回 `t_shop.review_count/rating_sum` 并重算 `avg_rating`、加回 `t_user.review_count`。
+请求体/响应 `data`：无（`R<Void>`）。规则：点评不存在或未下架返回 404；店铺已下架返回 404「店铺不存在或已下架，无法恢复点评」（防止为已下架店铺恢复点评致计数虚增）。
+
+#### GET `/api/v1/admin/reports`（管理员，产品优化 F4）
+分页查阅举报记录（运营据线下架线索）。
+查询参数：`page`、`size`、`status`(可选，`PENDING`/`RESOLVED`，省略=全部)。
+响应 `data`：`PageResult<ReportVO>`（含举报人昵称，批量回查）。moderation 决策 UI 为后续工作流，本次仅展示线索。
+
+---
+
+### 4.10 通知模块（产品优化 F1）
+
+> 路径前缀 `/api/v1/notifications`，全部需登录（不在白名单，走 `anyRequest().authenticated()`）。通知在被赞/被评/被关注瞬间写入（`actor==user` 跳过），前端顶栏铃铛 30s 轮询未读数。
+
+#### GET `/api/v1/notifications`（登录）
+本人的通知分页（时间倒序）。查询参数：`page`、`size`。响应 `data`：`PageResult<NotificationVO>`。
+
+#### GET `/api/v1/notifications/unread-count`（登录）
+未读数。响应 `data`：`{ "count": 7 }`。前端用于顶栏红点；30s 轮询，标记已读后 invalidate 同步刷新。
+
+#### POST `/api/v1/notifications/{id}/read`（登录）
+标记单条已读（幂等：不存在/已读都算成功）。响应 `data`：无（`R<Void>`）。
+
+#### POST `/api/v1/notifications/read-all`（登录）
+全部已读。响应 `data`：无（`R<Void>`）。
+
+---
+
+### 4.11 关注 feed 模块（产品优化 F3）
+
+> 路径前缀 `/api/v1/feed`，需登录。拉取式：取关注者 id 列表 → 点评按时间倒序分页，复用 `ReviewServiceImpl.assemble` 装配。
+
+#### GET `/api/v1/feed/following`（登录）
+我关注的人的点评。查询参数：`page`、`size`。响应 `data`：`PageResult<ReviewVO>`。规则：无关注对象返回空分页（非报错）；`IN(followeeIds)` + `ORDER BY create_time` 命中 `idx_user_status_create` 会 filesort（MVP 数据量可接受，后期可加 `idx_status_create`）。
+
+---
+
+### 4.12 举报模块（产品优化 F4）
+
+> 路径前缀 `/api/v1/reports`，需登录。对外前最低安全网：用户提交举报线索，后台据状态下架点评。
+
+#### POST `/api/v1/reports`（登录）
+提交举报。请求体：
+```json
+{ "targetType": "REVIEW", "targetId": 10, "reason": "垃圾广告或营销信息" }
+```
+`targetType` ∈ `{REVIEW, COMMENT, USER, SHOP}`（非法返回 400）；`reason`≤255；`targetId` 必填。
+响应 `data`：无（`R<Void>`）。规则：同一用户对同一目标只记一条，重复举报 `uk_reporter_target` 冲突 → 40905「已举报过该内容」（HTTP 200，前端默认错误路径 toast）。
+
 ---
 
 ## 5. 数据模型（VO）
@@ -440,6 +502,24 @@
 | hotShops | ShopVO[] | 热门店铺 |
 | hotReviews | ReviewVO[] | 热门点评 |
 
+### 5.7 NotificationVO（产品优化 F1）
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | number | 通知ID |
+| type | string | REVIEW_LIKED / REVIEW_COMMENTED / USER_FOLLOWED |
+| actorId | number | 触发者ID |
+| actorNickname | string | 触发者昵称（读时回查） |
+| actorAvatarUrl | string | 触发者头像 |
+| targetType | string | REVIEW / USER |
+| targetId | number | 目标ID |
+| preview | string | 摘要（评论内容片段，可空） |
+| isRead | boolean | 是否已读 |
+| createTime | string | 发生时间 |
+
+### 5.8 AdminReviewVO / ReportVO（产品优化 F4）
+`AdminReviewVO`（后台点评治理列表，含 status）：`id, shopId, shopName, userId, userNickname, content, rating, likeCount, replyCount, status(1正常/0已下架), createTime`。
+`ReportVO`（后台举报查阅）：`id, reporterId, reporterNickname, targetType, targetId, reason, status(PENDING/RESOLVED), createTime`。
+
 ---
 
 ## 6. 接口-模块-数据表速查
@@ -455,5 +535,9 @@
 | 点赞 | t_review_like | t_review, t_shop | review.like_count (+shop.like_count) |
 | 评论 | t_review_comment | t_review | review.reply_count |
 | 关注/取关 | t_follow | t_user | 双方 following_count / follower_count |
+| 通知(F1) | t_notification | t_user, t_notification | —（写于点赞/评论/关注同事务；读批量回查 actor） |
+| 关注 feed(F3) | — | t_follow, t_review, t_user | — |
+| 举报(F4) | t_report | — | —（uk 去重，40905 幂等） |
+| 后台点评下架/恢复(F4) | t_review | t_shop, t_user | shop.review_count/rating_sum/avg_rating, user.review_count, hotRank zrem |
 | 首页 | — | t_shop, t_review | — |
 | 上传 | — | （FileStorageService） | — |

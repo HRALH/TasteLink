@@ -139,3 +139,35 @@ CREATE TABLE IF NOT EXISTS `t_follow` (
   KEY `idx_follower_create` (`follower_id`, `create_time`),
   KEY `idx_followee_create`  (`followee_id`, `create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户关注关系表';
+
+-- 3.9 站内通知表（产品优化 F1：补齐社交反馈闭环——被赞/被评/被关注时写一条,
+--   接收者在顶栏红点感知；关系式而非快照——actor_id 关联 t_user,读时批量回查昵称/头像避免过期）
+CREATE TABLE IF NOT EXISTS `t_notification` (
+  `id`           BIGINT       NOT NULL AUTO_INCREMENT COMMENT '通知ID',
+  `user_id`      BIGINT       NOT NULL                COMMENT '接收者(被互动方)',
+  `actor_id`     BIGINT       NOT NULL                COMMENT '触发者(点赞/评论/关注的人)',
+  `type`         VARCHAR(32)  NOT NULL                COMMENT '类型:REVIEW_LIKED/REVIEW_COMMENTED/USER_FOLLOWED',
+  `target_type`  VARCHAR(16)  NOT NULL                COMMENT '目标:REVIEW/USER',
+  `target_id`    BIGINT       NOT NULL                COMMENT '目标ID',
+  `preview`      VARCHAR(255) NOT NULL DEFAULT ''     COMMENT '快照摘要(如评论内容片段)',
+  `is_read`      TINYINT      NOT NULL DEFAULT 0     COMMENT '0未读 1已读',
+  `create_time`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_read_create` (`user_id`, `is_read`, `create_time` DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='站内通知表';
+
+-- 3.10 内容举报表（产品优化 F4：对外前最低安全网。uk_reporter_target 限同一用户对同一目标
+--   只记一条,重复举报幂等；admin 可在后台据状态下架点评,本表为线索。敏感词/审核工作流后置）
+CREATE TABLE IF NOT EXISTS `t_report` (
+  `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '举报ID',
+  `reporter_id` BIGINT       NOT NULL                COMMENT '举报人(登录用户)',
+  `target_type` VARCHAR(16)  NOT NULL                COMMENT '目标:REVIEW/COMMENT/USER/SHOP',
+  `target_id`   BIGINT       NOT NULL                COMMENT '目标ID',
+  `reason`      VARCHAR(255) NOT NULL                COMMENT '举报理由(枚举文案 KEY)',
+  `status`      VARCHAR(16)  NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING 待处理 / RESOLVED 已处理',
+  `create_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_time` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_reporter_target` (`reporter_id`, `target_type`, `target_id`),
+  KEY `idx_status_create` (`status`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='内容举报表';

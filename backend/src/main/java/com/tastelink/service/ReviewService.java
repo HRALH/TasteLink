@@ -22,6 +22,9 @@ public interface ReviewService {
     /** GET /users/{userId}/reviews 某用户发布的点评列表 */
     PageResult<ReviewVO> listByUser(Long userId, PageQuery pq);
 
+    /** GET /feed/following 我关注的人的点评（产品优化 F3，按时间倒序） */
+    PageResult<ReviewVO> listByFollowees(List<Long> followeeIds, PageQuery pq);
+
     /** 店铺详情「近期点评」预览，按 like_count desc 取前 limit 条 */
     List<ReviewVO> recentByShop(Long shopId, int limit);
 
