@@ -18,6 +18,8 @@ TasteLink is a 城市餐饮口碑社区 (city food review community) — a monor
 - `09-后端优化方案.md` — backend 优化执行计划(安全 P0 / 正确性 / 索引与事务 / 可观测性,含 ponytail 做减法清单),对应 `feature/backend-optimization` 分支。
 - `10-前端优化方案.md` — frontend 优化执行计划(真 bug / React Query 数据层 / 构建瘦身 / 图片 / 测试,含 ponytail 做减法清单),对应 `feature/frontend-optimization` 分支。
 - `11-产品优化与执行清单.md` — 产品视角问题(F1 通知/F2 冷启动种子点评/F3 关注 feed/F4 内容治理/F5 评分体感)+ 落地决策 + 取舍 + 延后项(敏感词/审核工作流/Canal/IK/LBS)。本次全落地。
+- `12-功能清单与说明.md` — 功能视角逐项清单:每个功能(含每条基础查询)标注鉴权要求、对应接口与读/写表,与 `docs/05` 契约配套看。
+- `13-从零启动指南.md` — 面向外部 clone 者的启动手把手:本地原生起栈(含数据库初始化、可选中间件、配置、验证) + Docker 全栈一键起 + 提权管理员 + 排错。`docs/08` 的「极简入口」版。
 
 ## Commands
 
