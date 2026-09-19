@@ -14,9 +14,9 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
@@ -33,11 +33,14 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Node 20
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      # 版本下限由 jsdom→undici 8 决定（engines: node>=22.19.0）：跑在 Node 20 上时
+      # undici 会缺 webidl.util.markAsUncloneable，vitest forks worker 全起不来。
+      # 与本地开发版本（v24）对齐，避免本地绿、CI 红。
+      - name: Set up Node 24
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       # 另一分支（feature/frontend-optimization）已加 @tanstack/react-query 与
