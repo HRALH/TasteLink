@@ -20,7 +20,8 @@ TasteLink is a 城市餐饮口碑社区 (city food review community) — a monor
 - `11-产品优化与执行清单.md` — 产品视角问题(F1 通知/F2 冷启动种子点评/F3 关注 feed/F4 内容治理/F5 评分体感)+ 落地决策 + 取舍 + 延后项(敏感词/审核工作流/Canal/IK/LBS)。本次全落地。
 - `12-功能清单与说明.md` — 功能视角逐项清单:每个功能(含每条基础查询)标注鉴权要求、对应接口与读/写表,与 `docs/05` 契约配套看。
 - `13-从零启动指南.md` — 面向外部 clone 者的启动手把手:本地原生起栈(含数据库初始化、可选中间件、配置、验证) + Docker 全栈一键起 + 提权管理员 + 排错。`docs/08` 的「极简入口」版。
-- `14-云服务器部署指南.md` — 公网云服务器部署全流程:选型(4C8G 推荐,附内存账)/安全组只放 22-80-443/`vm.max_map_count`(ES 必需)/swap/Docker 安装 → `docker/.env` 配置 → **收紧 compose 端口暴露(中间件绑 127.0.0.1,compose 默认全映射到宿主机)** → 全栈起栈 → 逐项功能自检(含「中间件是否真生效而非悄悄降级」) → 提权管理员 → 域名 + certbot HTTPS → 备份/升级/排错速查。**注意 `STORAGE_PUBLIC_BASE_URL` 在入库时拼绝对 URL,晚改域名会让旧图片坏链(§8.3)**;§10.3 记录两处建议改动(`Dockerfile.frontend` 的 `node:20`→`24`、补 `.dockerignore`)。
+- `14-云服务器部署指南.md` — 公网云服务器部署全流程:选型(4C8G 推荐,附内存账)/安全组只放 22-80-443(未备案阶段临时加 **8081**,备案后删)/`vm.max_map_count`(ES 必需)/swap/Docker 安装 → **仓库根 `.env`** 配置(不是 `docker/.env`:compose 插值只从「工作目录+项目目录」读,放错会让 `JWT_SECRET` 报必填、`DB_PASSWORD` 静默回退成 `rootpass`) → **收紧 compose 端口暴露(中间件绑 127.0.0.1,compose 默认全映射到宿主机)** → 全栈起栈 → 逐项功能自检(含「中间件是否真生效而非悄悄降级」) → 提权管理员 → 域名 + certbot HTTPS → 备份/升级/排错速查。**注意 `STORAGE_PUBLIC_BASE_URL` 在入库时拼绝对 URL,晚改域名会让旧图片坏链(§8.3)**;§5.3 记首次构建实测(UID 1000 冲突 / 上传目录属主 / 种子数据字符集三个坑 + `mysql:8` 实为 8.4.11);§10.3 两处建议改动已降级为「可选」(`Dockerfile.frontend` 的 `node:20`→`24`、补 `.dockerignore`)。
+- `15-迭代更新与发布流程.md` — 上线**之后**怎么改:本地自检 → CI 门禁(push main/feature/** 与 PR 到 main)→ 服务器 `git pull` + **按改动范围只重建受影响的镜像**(含"日常更新为何比首次构建快"的层缓存解释)→ 配置类变更(`.env` 需容器重建、`nginx.conf` 是构建期须 `--build`)→ **数据安全边界**(只有 `tlc down -v` 会删库与图片)→ **数据库结构变更**(无 Flyway/Liquibase,`schema.sql` 不会自动重跑,须手工 DDL + 同步改 schema)→ **回滚及其边界**(代码可回滚,DDL 不会跟着回滚)→ 验收(含"如何确认新版本真的生效")→ 服务器本地改动与 git 冲突处置(`docker/docker-compose.yml` 的端口加固是仓库外手改,`git stash` 三段式,根治方案见 §9)。
 
 ## Commands
 
