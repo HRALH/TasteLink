@@ -3,7 +3,7 @@
 # 与根目录 docker-compose.yml（仅本地中间件）互补：本文件用于"一键拉起完整栈"。
 #
 # 运行（必须在仓库根目录，带 --project-directory . 使相对路径以仓库根为准）:
-#   1) 创建 docker/.env（模板见 docs/08 §4.2），至少填 JWT_SECRET / DB_PASSWORD
+#   1) 创建仓库根的 .env（模板见 docs/08 §4.2），至少填 JWT_SECRET / DB_PASSWORD
 #   2) 首次:  docker compose --project-directory . -f docker/docker-compose.yml up -d --build
 #   3) 查看日志: ... logs -f backend
 #   4) 停:        ... down

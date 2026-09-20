@@ -22,7 +22,11 @@ RUN mvn -B clean package -DskipTests \
 # ---- 2) 运行：JRE，非 root ----
 FROM ${JRE_IMAGE} AS runtime
 WORKDIR /app
-RUN groupadd -r tastelink && useradd -r -g tastelink -u 1000 tastelink \
+# 不指定 -u：新版 eclipse-temurin 基础镜像自带 UID 1000 的 ubuntu 用户，硬编码会 useradd 失败
+# 预先建出上传目录并 chown：空命名卷首次挂载会继承镜像内该目录的属主，
+# 否则卷是 root:root，以非 root 运行的进程写不进图片
+RUN groupadd -r tastelink && useradd -r -g tastelink tastelink \
+ && mkdir -p /app/data/uploads \
  && chown -R tastelink:tastelink /app
 COPY --from=build /build/app.jar /app/app.jar
 USER tastelink
