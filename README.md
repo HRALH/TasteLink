@@ -161,7 +161,7 @@ TasteLink/
 | 上传 | `POST /files/image`(`multipart/form-data`) | 需登录 |
 | 管理后台(v2) | `PUT /admin/shops/{id}`(编辑,409 并发冲突) · `DELETE /admin/shops/{id}`(延时清理) · `GET /admin/reviews` + `PUT /admin/reviews/{id}/hide\|restore`(内容治理) · `GET /admin/reports`(举报队列) | `ADMIN` |
 
-> 幂等码:`40902`(已点赞)、`40903`(已关注)由后端按 HTTP 200 返回,前端 `request.ts` 拦截器当成功处理。`40901` 用户名已存在、`40904` 不可关注自己;v2 新增 `409`(HTTP) `SHOP_VERSION_CONFLICT` —— 管理员并发改同店,`request.ts` 当可处理码抛 `ApiError(code)`,前端弹「加载最新内容」。
+> 幂等码:`40902`(已点赞)、`40903`(已关注)由后端按 HTTP 200 返回,前端 `request.ts` 拦截器当成功处理;`40905`(已举报过该内容)同样返回 200,但**不做特殊分支**,直接走默认错误提示展示后端文案。`40901` 用户名已存在、`40904` 不可关注自己、`42901` 登录尝试过于频繁(登录限流,Redis 计数,Redis 不可用时放行不阻断登录);v2 新增 `409`(HTTP) `SHOP_VERSION_CONFLICT` —— 管理员并发改同店,`request.ts` 当可处理码抛 `ApiError(code)`,前端弹「加载最新内容」。
 
 ## 数据模型(10 张表)
 
