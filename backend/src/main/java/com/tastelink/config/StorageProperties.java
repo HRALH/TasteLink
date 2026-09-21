@@ -14,11 +14,12 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "tastelink.storage")
 public class StorageProperties {
 
-    /** oss | local */
+    /** local | oss | cos */
     private String type = "local";
 
     private Local local = new Local();
     private Oss oss = new Oss();
+    private Cos cos = new Cos();
 
     @Getter
     @Setter
@@ -37,6 +38,24 @@ public class StorageProperties {
         private String accessKeySecret;
         private String bucket;
         /** 自定义访问域名；为空则用 https://{bucket}.{endpoint} */
+        private String domain;
+    }
+
+    /**
+     * 腾讯云 COS。默认访问域名 {bucket}.cos.{region}.myqcloud.com——从**同地域** CVM 访问会
+     * 自动解析到内网 IP、走内网流量（不计流量费，仅计请求次数），所以无需配置任何端点。
+     * {@code domain} 只在要换自定义域名 / CDN 时使用。
+     */
+    @Getter
+    @Setter
+    public static class Cos {
+        /** 地域，如 ap-shanghai；务必与 CVM 同地域，否则流量与延迟都劣化 */
+        private String region;
+        /** 建议用子账号密钥，仅授权该 bucket 读写 */
+        private String secretId;
+        private String secretKey;
+        private String bucket;
+        /** 自定义访问域名（CDN / 自有域名）；为空则用 https://{bucket}.cos.{region}.myqcloud.com */
         private String domain;
     }
 }

@@ -86,6 +86,13 @@ services:
       STORAGE_LOCAL_PATH: /app/data/uploads
       # 浏览器可达的后端地址（local 存储的图片 URL 会拼成绝对地址存库）
       STORAGE_PUBLIC_BASE_URL: ${STORAGE_PUBLIC_BASE_URL:-http://localhost:8080}
+      # ===== 腾讯云 COS（STORAGE_TYPE=cos 时必填）=====
+      # 桶地域务必与服务器同地域：默认域名在同地域内自动解析到内网，流量不计费
+      COS_REGION: ${COS_REGION:-ap-shanghai}
+      COS_SECRET_ID: ${COS_SECRET_ID:-}
+      COS_SECRET_KEY: ${COS_SECRET_KEY:-}
+      COS_BUCKET: ${COS_BUCKET:-}
+      COS_DOMAIN: ${COS_DOMAIN:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:8081}
       REDIS_HOST: redis
       RABBITMQ_HOST: rabbitmq
