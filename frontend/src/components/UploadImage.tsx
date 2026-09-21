@@ -53,9 +53,12 @@ export default function UploadImage({
         const res = await uploadImage(compressed ?? raw)
         onSuccess?.(res, undefined)
         setFileList((prev) => {
-          const next = prev.map((item) =>
-            item.uid === uid ? { ...item, status: 'done' as const, url: res.url } : item,
-          )
+          // ⚠️ fileList 是受控属性且本组件未接管 antd 的 onChange，antd 不会把用户选中的
+          // 文件写进列表——所以必须在这里自行补一条。历史 bug：原先只做 prev.map 就地更新，
+          // 因 uid 不在列表里而永远匹配不到，导致列表恒空、onChange 恒回传 []（上传成功但
+          // URL 从此丢失：点评图/头像/店铺封面三处皆失效）。
+          const done: UploadFile = { uid, name: raw.name, status: 'done', url: res.url }
+          const next = [...prev.filter((item) => item.uid !== uid), done].slice(-maxCount)
           emitUrls(next)
           return next
         })

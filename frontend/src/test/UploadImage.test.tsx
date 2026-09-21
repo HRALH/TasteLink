@@ -55,6 +55,39 @@ describe('UploadImage 大小校验（F6）', () => {
   })
 })
 
+describe('UploadImage customRequest 成功路径（回归）', () => {
+  it('上传成功 → onChange 收到该 url，且列表里能看到这张图', async () => {
+    server.use(
+      http.post('/api/v1/files/image', () =>
+        HttpResponse.json({
+          code: 0,
+          message: 'success',
+          data: {
+            url: 'https://tastelink-1491810581.cos.ap-shanghai.myqcloud.com/uploads/2026/09/abc.jpg',
+            ossKey: 'uploads/2026/09/abc.jpg',
+          },
+        }),
+      ),
+    )
+    const onChange = vi.fn()
+    const user = userEvent.setup()
+    const { container } = render(<UploadImage onChange={onChange} />)
+
+    const input = fileInput(container)
+    // <300KB 避开 compressImage 的 canvas 路径
+    const small = mkFile('ok.jpg', 'image/jpeg', 0.1)
+    await user.upload(input, small)
+
+    await waitFor(() => {
+      expect(onChange).toHaveBeenCalledWith([
+        'https://tastelink-1491810581.cos.ap-shanghai.myqcloud.com/uploads/2026/09/abc.jpg',
+      ])
+    })
+    // 上传成功后列表里应有该文件的预览图
+    expect(container.querySelectorAll('.ant-upload-list-item').length).toBe(1)
+  })
+})
+
 describe('UploadImage customRequest 失败清理（F6）', () => {
   it('上传 API 500 → fileList 清理 + message.error「上传失败」', async () => {
     server.use(
