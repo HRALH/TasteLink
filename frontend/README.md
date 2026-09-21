@@ -11,6 +11,7 @@ TasteLink 餐饮口碑社区 Web 端（SPA）。对应设计文档 `docs/01-需�
 | 全局状态 | Zustand（persist） | 登录态 token/userInfo，持久化 localStorage |
 | 路由 | React Router v6 | 路由表 + 路由守卫（RequireAuth） |
 | 请求 | axios | baseURL + JWT 拦截器 + 统一错误 + 401 跳登录 |
+| 数据层 | @tanstack/react-query 5 | 列表/详情的缓存与失效；通知未读数 30s 轮询（`refetchInterval`） |
 
 ## 目录结构
 
@@ -19,15 +20,19 @@ src/
 ├── main.tsx               入口（ConfigProvider 中文 + 主题色）
 ├── App.tsx                BrowserRouter 包裹路由
 ├── api/                   接口层（与后端 1:1）：request / auth / user / shop /
-│                          review / interaction / follow / home / file
+│                          review / interaction / follow / home / file /
+│                          notification / report / feed / admin
 ├── store/authStore.ts     登录态（persist）
-├── router/index.tsx       路由表 + RequireAuth 守卫
+├── router/index.tsx       路由表 + RequireAuth / RequireAdmin 守卫
 ├── types/api.ts           统一返回体 R / PageResult / 各 VO 契约
-├── utils/constants.ts     错误码、城市字典、排序枚举、常量
+├── utils/                 constants(错误码/城市/排序) · thumb(对象存储缩略图) ·
+│                          compressImage(上传前 canvas 压缩) · jwt · message · motion
 ├── components/            通用组件：ShopCard / ReviewCard / UploadImage /
 │                          FollowButton / UserCard / FollowList / AuthShell /
-│                          PagePlaceholder / layout/MainLayout
-└── pages/                 auth / home / shop / review / user / common(404)
+│                          ReportButton / QueryError，以及 editorial/(Eyebrow /
+│                          SectionTitle / PullQuote / RankBadge)、admin/、layout/MainLayout
+└── pages/                 home / auth / shop / review / user / following /
+                           notification / admin / common(404)
 ```
 
 ## 命令
@@ -57,6 +62,10 @@ npm run preview    # 预览构建产物
 | M11 | 发点评（UploadImage 多图 + 评分）+ 点评详情 | ✅ |
 | M12 | 点赞（乐观更新、幂等）+ 评论列表/输入 | ✅ |
 | M13 | 用户主页 + 编辑资料 + 关注/粉丝列表 | ✅ |
-| M14 | 前后端联调验收 | 待后端就绪 |
+| M14 | 前后端联调验收 | ✅ 已联调,并已部署到公网服务器(`docs/14`) |
+| v2 F1 | 通知铃铛(未读数 30s 轮询)+ 通知列表页 | ✅ |
+| v2 F3 | 关注 feed(`/following`,最新/最热排序) | ✅ |
+| v2 F4 | 举报入口(`ReportButton`)+ 管理员内容治理页 | ✅ |
+| v2 FE-B/C | 管理员后台(店铺编辑乐观锁 409)+ 视觉系统「赤金暖纸」重构 + 前端测试基线 | ✅ |
 
 > 通用约定见 `docs/03 §7`：图片统一走 `/files/image` 拿 URL 后再提交；分页 `page/size` + `PageResult`；排序字典见 `utils/constants.ts`。

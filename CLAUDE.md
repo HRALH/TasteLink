@@ -10,7 +10,7 @@ TasteLink is a 城市餐饮口碑社区 (city food review community) — a monor
 - `01-需求文档.md` — requirements & milestones
 - `02-后端模块划分.md` — backend module split & key technical design (read this before backend work)
 - `03-前端模块划分.md` — frontend module split
-- `04-数据库表设计.md` — 8 tables DDL + seed data (`backend/src/main/resources/db/schema.sql`, `data.sql`)
+- `04-数据库表设计.md` — 10 tables DDL + seed data (`backend/src/main/resources/db/schema.sql`, `data.sql`)
 - `05-接口API设计.md` — REST contract, all paths/params/returns. **API changes must update this doc and be reflected in both `frontend/src/api/*` and the relevant backend controller.**
 - `06-中间件升级开发计划.md` — v2 middleware upgrade plan (Redis 热度排行 / 角色鉴权+乐观锁 / RabbitMQ 延时清理 / ES+Canal). **主序列已完成并合入 `main`** — Phase 0/A/B/C(C-Full)/D 应用层 + Testcontainers 测试基线 + 文档同步全部落地;§0.6 给出逐阶段核验表。Canal binlog 增量同步、IK 中文分词、XXL-JOB、Redisson 为**计划内延后/infra 待办**;各 Phase 落地细节见下文「Backend architecture」对应小节。
 - `07-前端开发计划.md` — v2 frontend plan (admin 后台 FE-0+B+C / 视觉系统「赤金暖纸」重构 / 前端测试基线)。
