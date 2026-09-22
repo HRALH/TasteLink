@@ -168,3 +168,22 @@ tastelink:
     enabled: ${SEARCH_ENABLED:true}
     # 定时全量重建：以 MySQL status=1 店铺为准重灌 ES（修复漂移 + Canal 未到位时的唯一同步）
     rebuild-cron: ${SEARCH_REBUILD_CRON:0 */10 * * * *}
+  # B5：XXL-JOB 调度中心接管三个对账/重建定时任务的触发（可视化调度 + 多实例路由 + 执行日志）
+  xxl-job:
+    # 总开关。默认 false：不创建执行器、不绑端口、仍走 @Scheduled + ShedLock（与引入前行为一致）。
+    # 置 true 后 cron 改由 admin 侧配置，本地 yml 的 *-cron 不再决定触发时机
+    enabled: ${XXL_JOB_ENABLED:false}
+    # 调度中心地址；多个用逗号分隔。本地默认对应 docker-compose.yml 的 xxl-job-admin（:8888）
+    admin-addresses: ${XXL_JOB_ADMIN_ADDRESSES:http://localhost:8888/xxl-job-admin}
+    # 通信令牌，须与 admin 的 xxl.job.accessToken 一致；生产务必替换掉默认值
+    access-token: ${XXL_JOB_ACCESS_TOKEN:default_token}
+    executor:
+      # 执行器注册名，须与 admin「执行器管理」里的 AppName 一致，否则不会派发任务
+      appname: ${XXL_JOB_EXECUTOR_APPNAME:tastelink-executor}
+      # 注册地址（形如 http://host:port/）与网卡 IP；留空自动推导。容器内多网卡/跨网络时须显式指定
+      address: ${XXL_JOB_EXECUTOR_ADDRESS:}
+      ip: ${XXL_JOB_EXECUTOR_IP:}
+      # 执行器端口（承载 admin 的任务回调）；容器部署须保证 admin 能直连该端口
+      port: ${XXL_JOB_EXECUTOR_PORT:9999}
+      log-path: ${XXL_JOB_EXECUTOR_LOG_PATH:./logs/xxl-job/jobhandler}
+      log-retention-days: ${XXL_JOB_EXECUTOR_LOG_RETENTION_DAYS:30}

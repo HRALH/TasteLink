@@ -35,6 +35,39 @@ services:
       # 仅在数据卷为空时首次初始化（与 spring.sql.init.mode=never 契合）；改 schema 需 down -v
       - ./backend/src/main/resources/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./backend/src/main/resources/db/data.sql:/docker-entrypoint-initdb.d/02-data.sql:ro
+      # B5：调度中心自己的库（xxl_job，与业务库 tastelink 无关）。同样只在数据卷为空时执行——
+      # 已有库要补，手动导入：docker compose ... exec -T mysql mysql -uroot -p"$DB_PASSWORD" < docker/xxl-job/tables_xxl_job.sql
+      - ./docker/xxl-job/tables_xxl_job.sql:/docker-entrypoint-initdb.d/03-xxl-job.sql:ro
+
+  # XXL-JOB 调度中心（B5）：可视化调度 + 多实例路由 + 执行日志。
+  # 登录走 SSH 隧道看 http://127.0.0.1:8888/xxl-job-admin（默认 admin / 123456，登录后立即改密），
+  # 在「执行器管理」新增 AppName=tastelink-executor（自动注册），再在「任务管理」建 3 个任务
+  # （JobHandler 名见 docs/08 §5.4）。后端侧由 XXL_JOB_ENABLED 控制是否接管。
+  xxl-job-admin:
+    image: xuxueli/xxl-job-admin:2.4.1
+    container_name: tastelink-xxl-job-admin
+    restart: unless-stopped
+    # profile 隔离：默认的 `up -d` 不会起它，故老部署升级后不受影响（老的 mysql 数据卷里
+    # 没有 xxl_job 库，直接起会反复重启）。要用时显式启用：
+    #   docker compose --project-directory . --profile xxl-job -f docker/docker-compose.yml up -d
+    #
+    # ⚠️ 一个反直觉的坑：profiles 与 depends_on 不能混用——只要有任何服务 depends_on 它，
+    # 不带 profile 的 `config`/`up -d` 就会整体报 `depends on undefined service ... invalid
+    # compose project`，**连业务容器都管不了**。故 backend 侧刻意不写对它的 depends_on
+    # （admin 未就绪时执行器自行重试注册，本就不需要顺序约束）。
+    profiles: ["xxl-job"]
+    depends_on:
+      mysql: { condition: service_healthy }
+    environment:
+      # 官方镜像入口为 `java -jar /app.jar $PARAMS`，故用 PARAMS 覆盖数据源与通信令牌
+      PARAMS: >-
+        --spring.datasource.url=jdbc:mysql://mysql:3306/xxl_job?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+        --spring.datasource.username=root
+        --spring.datasource.password=${DB_PASSWORD:-rootpass}
+        --xxl.job.accessToken=${XXL_JOB_ACCESS_TOKEN:-default_token}
+    # 与控制台一致：中间件一律只绑回环，要看得走 SSH 隧道（docs/14 §7.3）。
+    # admin 默认口令是 admin/123456，绑 0.0.0.0 等于把调度中心摆到公网上。
+    ports: ["127.0.0.1:8888:8080"]
 
   redis:
     image: redis:7-alpine
@@ -73,6 +106,9 @@ services:
       redis: { condition: service_started }
       rabbitmq: { condition: service_started }
       elasticsearch: { condition: service_started }
+      # 注意：这里**不能**写 xxl-job-admin —— 它带 profiles，跨 profile 的 depends_on 会让
+      # 不带 profile 的 `config`/`up -d` 整体报 invalid compose project（实测）。执行器在
+      # admin 缺位时会自行重试注册，本就不需要顺序约束。
     ports: ["8080:8080"]
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
@@ -102,6 +138,20 @@ services:
       RANK_CACHE_ENABLED: ${RANK_CACHE_ENABLED:-true}
       RABBIT_ENABLED: ${RABBIT_ENABLED:-true}
       SEARCH_ENABLED: ${SEARCH_ENABLED:-true}
+      # ===== XXL-JOB（B5）=====
+      # 默认 false：不创建执行器、三个对账任务仍由本地 @Scheduled + ShedLock 驱动。
+      # 启用三步：① 确认 xxl_job 库已建（新数据卷由 03-xxl-job.sql 自动建；老数据卷手动导入）
+      #          ② admin 侧注册执行器 + 建任务（JobHandler 见 docs/08 §5.4）
+      #          ③ 把本值改 true —— 注意：本值 true 而 admin 不可用时，本地 cron 已被让位，
+      #             对账会静默停摆（admin 侧看不到、应用侧只有日志），故务必先确认 admin 就绪
+      XXL_JOB_ENABLED: ${XXL_JOB_ENABLED:-false}
+      XXL_JOB_ADMIN_ADDRESSES: http://xxl-job-admin:8080/xxl-job-admin
+      XXL_JOB_ACCESS_TOKEN: ${XXL_JOB_ACCESS_TOKEN:-default_token}
+      # 执行器注册名须与 admin「执行器管理」的 AppName 一致
+      XXL_JOB_EXECUTOR_APPNAME: ${XXL_JOB_EXECUTOR_APPNAME:-tastelink-executor}
+      # 容器内网卡可能多张，自动推导的 IP 若 admin 回调不通，改用 service 名显式注册：
+      #   XXL_JOB_EXECUTOR_ADDRESS: http://backend:9999/
+      XXL_JOB_EXECUTOR_LOG_PATH: /app/logs/xxl-job/jobhandler
     volumes:
       - backend_uploads:/app/data/uploads
 

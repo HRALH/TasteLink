@@ -26,8 +26,9 @@ TasteLink 是一个 Monorepo(Spring Boot 后端 + Vite/React 前端 + 中文设�
 - **热度排行缓存**(v2 Phase A):首页热门点评读 Redis ZSet(`ZREVRANGE`),点赞在事务提交后(afterCommit)写 ZSet,`ScheduledRankRebuild` 定时对账修复漂移,`RANK_CACHE_ENABLED=false` 降级回 MySQL
 - **店铺删除延时清理**(v2 Phase C / C-Full):删店先标记下架(同事务级联 `status=0` + 回扣计数),`afterCommit` 发 RabbitMQ 延时消息(TTL+DLX,免插件),消费端级联物理删评论/点赞/图片,`ScheduledShopCleanupReconcile` 对账兜底
 - **关键词检索**(v2 Phase D):店铺 `keyword` 命中走 Elasticsearch(`ShopDoc` + Criteria),异常/禁用降级回 MySQL `LIKE`,`ScheduledShopReconcile` 定时全量重建索引
+- **定时任务调度**(B5):三个对账任务(热度榜重建 / 删店滞留补清 / ES 索引重建)默认走本地 `@Scheduled` + ShedLock,置 `XXL_JOB_ENABLED=true` 改由 XXL-JOB 调度中心触发,获得可视化调度、执行日志与多实例路由
 
-> MVP 范围与边界见 [`docs/01-需求文档.md`](docs/01-需求文档.md)。v2 中间件升级(见 [`docs/06`](docs/06-中间件升级开发计划.md))已引入 Redis / RabbitMQ / Elasticsearch,三阶段均带特性开关可降级回 MySQL;中间件缺位时应用仍可启动(各自懒加载)。**Canal binlog 增量同步、IK 中文分词**为 infra 待办,当前以定时全量重建兜底同步。
+> MVP 范围与边界见 [`docs/01-需求文档.md`](docs/01-需求文档.md)。v2 中间件升级(见 [`docs/06`](docs/06-中间件升级开发计划.md))已引入 Redis / RabbitMQ / Elasticsearch / XXL-JOB,均带特性开关可降级回 MySQL;中间件缺位时应用仍可启动(各自懒加载)。**Canal binlog 增量同步、IK 中文分词**为 infra 待办,当前以定时全量重建兜底同步。
 
 ## 技术栈
 
@@ -113,8 +114,11 @@ Vite 把 `/api` 代理到 `http://localhost:8080`,本地开发无 CORS。访问 
 | `RABBITMQ_HOST`/`_PORT`/`_USER`/`_PASSWORD`/`_VHOST` | RabbitMQ(v2 Phase C) | `localhost:5672`/`guest`/`/` |
 | `ES_URIS` | Elasticsearch(v2 Phase D) | `http://localhost:9200` |
 | `RANK_CACHE_ENABLED`/`RABBIT_ENABLED`/`SEARCH_ENABLED` | v2 三阶段特性开关 | `true`,置 `false` 降级回 MySQL |
-| `RANK_REBUILD_CRON`/`SEARCH_REBUILD_CRON`/`RABBIT_CLEANUP_RECON_CRON` | ZSet / ES 索引 / 删店对账 定时重建 cron | `0 */10 * * * *` 等 |
+| `RANK_REBUILD_CRON`/`SEARCH_REBUILD_CRON`/`RABBIT_CLEANUP_RECON_CRON` | ZSet / ES 索引 / 删店对账 定时重建 cron(仅 `XXL_JOB_ENABLED=false` 时生效) | `0 */10 * * * *` 等 |
 | `RABBIT_CLEANUP_DELAY_MS` | 删店延时清理窗口(delay-queue `x-message-ttl`) | `5000ms` |
+| `XXL_JOB_ENABLED` | 定时任务改由 XXL-JOB 调度中心触发(B5) | `false`(关闭时零回归;置 `true` 前先确认 admin 就绪) |
+| `XXL_JOB_ADMIN_ADDRESSES`/`XXL_JOB_ACCESS_TOKEN` | 调度中心地址 / 通信令牌(须与 admin 一致) | `http://localhost:8888/xxl-job-admin` / `default_token` |
+| `XXL_JOB_EXECUTOR_APPNAME`/`_PORT`/`_ADDRESS`/`_IP` | 执行器注册名(须与 admin AppName 一致) / 端口 / 注册地址 | `tastelink-executor` / `9999` / 空(自动推导) |
 
 > 三种存储形态:`local` 写入 `./data/uploads/yyyy/MM/uuid.ext`,经后端 `/static/uploads/**` 提供(库内存的是**绝对 URL**,换域名要同步改库);`oss` / `cos` 写入 `uploads/yyyy/MM/uuid.ext`,用自定义 `domain` 或各自默认域名对外。`oss` 与 `cos` **同构**(同一 key 形态与 URL 反推规则),切换时清理与解析逻辑不用改;COS 的桶与服务器**同地域**时默认域名会自动解析到内网、流量不计费,`local → COS` 的迁移步骤见 [`docs/14-云服务器部署指南.md`](docs/14-云服务器部署指南.md) §12。
 
@@ -124,7 +128,7 @@ Vite 把 `/api` 代理到 `http://localhost:8080`,本地开发无 CORS。访问 
 TasteLink/
 ├── backend/                # Spring Boot 后端
 │   └── src/main/java/com/tastelink/
-│       ├── config/         # Security / MybatisPlus / Oss / Storage / MetaObjectHandler / RabbitMQConfig / ShopIndexInitializer / Scheduled*
+│       ├── config/         # Security / MybatisPlus / Oss / Storage / MetaObjectHandler / RabbitMQConfig / ShopIndexInitializer / XxlJobConfig / Scheduled*
 │       ├── controller/     # /api/v1 下 13 个模块(含 admin)
 │       ├── service+impl/   # 业务逻辑(含幂等计数模式、HotRank/Search/ShopCleanup)
 │       ├── entity/mapper/  # 10 张表实体 + MyBatis-Plus mapper(+ShopDoc ES 文档)
@@ -214,7 +218,7 @@ npm run preview              # 预览构建产物
 
 ## Docker 部署
 
-一键全栈(MySQL + Redis + RabbitMQ + Elasticsearch + 前后端),核心命令(须在仓库根、带 `--project-directory .`):
+一键全栈(MySQL + Redis + RabbitMQ + Elasticsearch + 前后端 + 可选 XXL-JOB 调度中心),核心命令(须在仓库根、带 `--project-directory .`):
 
 ```bash
 # 1) 在**仓库根**创建 .env(不是 docker/.env —— compose 插值只从「工作目录+项目目录」读,
@@ -222,6 +226,9 @@ npm run preview              # 预览构建产物
 # 2) 构建并拉起(首次加 --build):
 docker compose --project-directory . -f docker/docker-compose.yml up -d --build
 # 前端 http://localhost:8081 · 后端 :8080 · RabbitMQ 管理界面 :15672 · ES :9200
+# 3) 可选:调度中心(带 profile,默认不起;需先建 xxl_job 库,三步见 docs/08 §5.4)
+docker compose --project-directory . -f docker/docker-compose.yml --profile xxl-job up -d
+#    调度中心 http://localhost:8888/xxl-job-admin(默认 admin/123456,登录后立即改密)
 docker compose --project-directory . -f docker/docker-compose.yml logs -f backend
 docker compose --project-directory . -f docker/docker-compose.yml down        # 停
 ```

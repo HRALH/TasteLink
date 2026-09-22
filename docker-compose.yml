@@ -1,11 +1,13 @@
 # =====================================================================
-# TasteLink 本地中间件（v2 阶段引入，按需追加 rabbitmq / elasticsearch / canal）
+# TasteLink 本地中间件（v2 阶段引入，按需追加 rabbitmq / elasticsearch / canal / xxl-job-admin）
 # 仅列当前阶段真正新增的组件；本地 MySQL 请沿用你现有的 localhost:3306 实例，
 # 不在此 compose 内重复起一个，避免端口冲突与已有数据错位。
 #
 # 用法：
 #   docker compose up -d redis          # 起 Redis
 #   docker compose up -d rabbitmq       # 起 RabbitMQ（v2 Phase C 店铺延时清理）
+#   docker compose up -d elasticsearch  # 起 ES（v2 Phase D 关键词检索）
+#   docker compose up -d xxl-job-admin  # 起调度中心（B5；需先导入 docker/xxl-job/tables_xxl_job.sql）
 #   docker compose down                 # 停并清理
 # =====================================================================
 services:
@@ -45,4 +47,34 @@ services:
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
     ports:
       - "9200:9200"
+    restart: unless-stopped
+
+  # XXL-JOB 调度中心（B5）：定时任务的可视化调度与执行日志。
+  # 与上面三个中间件不同，admin 需要自己的库（xxl_job），而本 compose 刻意不含 MySQL
+  # （沿用你本地已有的 3306 实例），故此处经 host.docker.internal 连宿主 MySQL：
+  #   1) 先建库：mysql -h127.0.0.1 -uroot -p < docker/xxl-job/tables_xxl_job.sql
+  #   2) 起 admin：docker compose up -d xxl-job-admin
+  #   3) 登录 http://localhost:8888/xxl-job-admin（默认 admin / 123456，登录后立即改密）
+  #      在「执行器管理」新增执行器 AppName=tastelink-executor（自动注册）
+  #      在「任务管理」建 3 个任务，JobHandler 见 docs/08 §5.4
+  #   4) 后端把 XXL_JOB_ENABLED 置 true（application-local.yml 或环境变量）
+  # 注意：DB_* 取自仓库根 .env / shell 环境；host-gateway 需 Docker 20.10+。
+  #      不加这个服务、把 XXL_JOB_ENABLED 留 false，则三个任务仍由本地 cron + ShedLock 驱动。
+  xxl-job-admin:
+    image: xuxueli/xxl-job-admin:2.4.1
+    container_name: tastelink-xxl-job-admin
+    # profile 隔离：`docker compose up -d`（不带服务名）不会起它。显式启用：
+    #   docker compose --profile xxl-job up -d
+    profiles: ["xxl-job"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # 官方镜像入口为 `java -jar /app.jar $PARAMS`，故用 PARAMS 覆盖数据源与令牌
+      PARAMS: >-
+        --spring.datasource.url=jdbc:mysql://host.docker.internal:3306/xxl_job?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+        --spring.datasource.username=${DB_USER:-root}
+        --spring.datasource.password=${DB_PASSWORD:-}
+        --xxl.job.accessToken=${XXL_JOB_ACCESS_TOKEN:-default_token}
+    ports:
+      - "8888:8080"
     restart: unless-stopped

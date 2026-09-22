@@ -45,3 +45,13 @@ tastelink:
   # v2 Phase D：店铺关键词 ES 检索；SEARCH_ENABLED=false 则 keyword 回退 MySQL LIKE（无 ES 也能跑）
   search:
     enabled: true
+  # B5：XXL-JOB 调度中心。默认关闭；置 true 后三个对账任务改由 admin 触发，
+  # 需先起 admin（docker compose up -d xxl-job-admin）并在其「执行器管理」注册 tastelink-executor
+  xxl-job:
+    enabled: false
+    admin-addresses: http://localhost:8888/xxl-job-admin
+    # 须与 admin 侧 xxl.job.accessToken 一致
+    access-token: default_token
+    executor:
+      appname: tastelink-executor
+      port: 9999
